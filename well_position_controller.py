@@ -1,42 +1,4 @@
-from abc import abstractmethod, ABC
-
-
-class WellPositionEvaluator(ABC):
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def evaluate(self, img, debug_mode=False):
-        """
-            Vision algorithm implementation of the evaluator.
-
-        Args:
-            img: 2d Image matrix to evaluate
-            debug_mode: Set to True to display live visual feedback for debugging purposes
-
-        Returns:
-            A vector (x, y) that represents the found offset between the well center and diaphragm center.
-            Should return None if no vector is found.
-        """
-        pass
-
-
-class WellBottomFeaturesEvaluator(WellPositionEvaluator):
-    """ Scores an image based on illuminated well bottom features. """
-    def evaluate(self, img, debug_mode=False):
-        return None
-
-
-class HoughTransformEvaluator(WellPositionEvaluator):
-    """ Scores an image based on the circle center found by using the Hough circle transform. """
-    def evaluate(self, img, debug_mode=False):
-        return None
-
-
-class SymmetryEvaluator(WellPositionEvaluator):
-    """ Scores an image based on symmetry above the diaphragm. """
-    def evaluate(self, img, debug_mode=False):
-        return None
+import numpy as np
 
 
 class WellPositionController:
@@ -49,11 +11,94 @@ class WellPositionController:
 
     This class supports multiple scoring algorithms that are weighted differently
     """
-    def __init__(self, setpoints, *evaluators):
+    def __init__(self, setpoints, camera, motor_x, motor_y, max_offset, *evaluators, target_coordinates=None):
         """
-
         Args:
             setpoints: List of tuples, each tuple of the format (x, y)
+            camera: Camera object instance to capture images
+            motor_x: Motor object instance that controls x axis position
+            motor_y: Motor object instance that controls y axis position
+            max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
+            target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
+        """
+        self.setpoints = setpoints
+        self.evaluators = evaluators
+        self.target = target_coordinates
+        for evaluator, weight in self.evaluators:
+            evaluator.target = self.target
+        self.camera = camera
+        self.motor_x = motor_x
+        self.motor_y = motor_y
+        self.max_offset = max_offset
+
+    def calibrate(self):
+        """
+        Find the diaphragm center by analyzing an image without a well plate present.
+        Sets self.target to the newly calculated diaphragm center.
+        """
+        # capture image
+        img = self.camera.capture_raw_image()
+        # make a list of centroids and their weights
+        centroids = []
+        weights = []
+        for evaluator, weight in self.evaluators:
+            evaluator.evaluate(img)
+            centroid = evaluator.centroid
+            if centroid is not None:
+                centroids.append(evaluator.centroid)
+                weights.append(weight)
+        # calculate the average centroid
+        self.target = tuple(np.average(centroids, 0, weights))
+        for evaluator, weight in self.evaluators:
+            evaluator.target = self.target
+
+    def evaluate_position(self, img):
+        """
+        Evaluates position based on all evaluator classes and their output weights.
+        Returns:
+             an (x,y) offset vector if the image is not correct or True if the image is correct
+        """
+        offsets = []
+        weights = []
+        for evaluator, weight in self.evaluators:
+            offset = evaluator.evaluate(img)
+            if offset is not None:
+                offsets.append(offset)
+                weights.append(weight)
+        # calculate the absolute average offset
+        offset = abs(np.average(offsets, 0, weights))
+        if offset[0] < self.max_offset[0] and offset[1] < self.max_offset[1]:
+            return True
+        else:
+            return offset
+
+    def control_loop(self):
+        """
+        Main control loop
+        """
+        for setpoint in self.setpoints:
+            # todo: feedforward to move to next setpoint position
+            passed = False
+            while not passed:
+                # Use camera feedback to improve position until it passes
+                img = self.camera.capture_raw_image()
+                result = self.evaluate_position(img)
+                if result is True:
+                    passed = True
+                else:
+                    # todo adjust motor control
+                    pass
+            # todo: take full resolution image and analyze for worm count / life stage
+
+    def start(self):
+        """
+        Start control loop.
+        """
+        pass
+
+    def stop(self):
+        """
+        Stop control loop.
         """
         pass
