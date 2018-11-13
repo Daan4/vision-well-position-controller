@@ -33,6 +33,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         # Set up debug windows if debug mode is on
         self.target = target
         self.debug = debug
+        self.centroid = None
         if self.debug:
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('Blur', 410, 308)
@@ -114,6 +115,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
         # calculate centroid for best match blob
         if best_match is None:
+            self.centroid = None
             if self.debug:
                 cv2.imshow('Result', original)
             return None
@@ -123,6 +125,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cY = int(M["m01"] / M["m00"])
             centroid = (cX, cY)
             offset = tuple(np.subtract(self.target, centroid))
+            self.centroid = centroid
             if self.debug:
                 # Overlay results on source image and display them
                 cv2.circle(original, self.target, 5, 0, 1)
