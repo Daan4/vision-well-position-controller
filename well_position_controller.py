@@ -1,4 +1,7 @@
 import numpy as np
+from camera import Camera
+from motor import Motor
+from well_position_evaluators import WellBottomFeaturesEvaluator
 
 
 class WellPositionController:
@@ -104,3 +107,10 @@ class WellPositionController:
         Stop control loop.
         """
         pass
+
+
+if __name__ == '__main__':
+    # todo load setpoints
+    setpoints = [1, 1]
+    evaluators = ((WellBottomFeaturesEvaluator(True), 1),)
+    wpc = WellPositionController(setpoints, Camera(), Motor(), Motor(), (16, 16), (WellBottomFeaturesEvaluator(True), 1))
