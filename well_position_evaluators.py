@@ -5,16 +5,17 @@ import numpy as np
 
 class WellPositionEvaluator(ABC):
     @abstractmethod
-    def __init__(self, target, debug):
+    def __init__(self, debug):
         pass
 
     @abstractmethod
-    def evaluate(self, img):
+    def evaluate(self, img, target):
         """
             Vision algorithm implementation of the evaluator.
 
         Args:
             img: grayscale 2d opencv image matrix to evaluate
+            target: target position (x,y) tuple9
             debug_mode: Set to True to display live visual feedback for debugging purposes
 
         Returns:
@@ -28,10 +29,9 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
     # todo
     # current implementation assumes 410x308 resolution
     # scale vision parameters accordingly to actual rpi camera resolution
-    def __init__(self, target, debug=False):
-        super().__init__(target, debug)
+    def __init__(self, debug=False):
+        super().__init__(debug)
         # Set up debug windows if debug mode is on
-        self.target = target
         self.debug = debug
         self.centroid = None
         if self.debug:
@@ -55,7 +55,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cv2.resizeWindow('Result', 410, 308)
             cv2.moveWindow('Result', 50, 500)
 
-    def evaluate(self, img):
+    def evaluate(self, img, target=(0, 0)):
         if self.debug:
             # Make a copy when debug mode is on so that we can overlay the results on it later.
             original = img.copy()
@@ -124,11 +124,11 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
             centroid = (cX, cY)
-            offset = tuple(np.subtract(self.target, centroid))
+            offset = tuple(np.subtract(target, centroid))
             self.centroid = centroid
             if self.debug:
                 # Overlay results on source image and display them
-                cv2.circle(original, self.target, 5, 0, 1)
+                cv2.circle(original, target, 5, 0, 1)
                 cv2.circle(original, centroid, 4, 0, 5)
                 cv2.imshow('Result', original)
             return offset
@@ -138,6 +138,6 @@ if __name__ == '__main__':
     # Test WellBottomFeaturesEvaluator with a test image
     #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
     imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
-    x = WellBottomFeaturesEvaluator((227, 144), False)
-    print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1)))
+    x = WellBottomFeaturesEvaluator(False)
+    print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
     cv2.waitKey(0)

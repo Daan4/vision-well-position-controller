@@ -25,8 +25,6 @@ class WellPositionController:
         self.setpoints = setpoints
         self.evaluators = evaluators
         self.target = target_coordinates
-        for evaluator, weight in self.evaluators:
-            evaluator.target = self.target
         self.camera = camera
         self.motor_x = motor_x
         self.motor_y = motor_y
@@ -50,8 +48,6 @@ class WellPositionController:
                 weights.append(weight)
         # calculate the average centroid
         self.target = tuple(np.average(centroids, 0, weights))
-        for evaluator, weight in self.evaluators:
-            evaluator.target = self.target
 
     def evaluate_position(self, img):
         """
@@ -59,10 +55,13 @@ class WellPositionController:
         Returns:
              an (x,y) offset vector if the image is not correct or True if the image is correct
         """
+        if self.target is None:
+            # A target has to be set either by manually setting it or by calling calibrate() without a well plate present.
+            raise AssertionError('Target coordinates should be set manually or via calibration.')
         offsets = []
         weights = []
         for evaluator, weight in self.evaluators:
-            offset = evaluator.evaluate(img)
+            offset = evaluator.evaluate(img, self.target)
             if offset is not None:
                 offsets.append(offset)
                 weights.append(weight)
@@ -78,17 +77,20 @@ class WellPositionController:
         Main control loop
         """
         for setpoint in self.setpoints:
-            # todo: feedforward to move to next setpoint position
+            # todo: feedforward to move to the next setpoint position
+
             passed = False
             while not passed:
                 # Use camera feedback to improve position until it passes
                 img = self.camera.capture_raw_image()
                 result = self.evaluate_position(img)
                 if result is True:
+                    # todo the position is correct -> stop the motors
                     passed = True
                 else:
-                    # todo adjust motor control
+                    # todo adjust motor speed and direction via PID
                     pass
+
             # todo: take full resolution image and analyze for worm count / life stage
 
     def start(self):
