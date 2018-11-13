@@ -1,14 +1,17 @@
 from well_position_controller import *
 
 
-def create_random_error(max_error, stepper_motor):
+def create_random_error(min_error, max_error, stepper_motor_x, stepper_motor_y):
     """
         Introduce a random error to the positioning of the given motor.
         Useful for testing purposes to see if the WellPositionController can correct the error introduced by this function.
+        Error is specified in 1 direction. Totale error range will be 2x the given value.
 
     Args:
-        max_error: max error value (in steps) (in 1 direction, so total error band will be 2*max_error)
-        stepper_motor: StepperMotor class instance to control the motor position
+        min_error: min error value (in steps)
+        max_error: max error value (in steps)
+        stepper_motor_x: StepperMotor class instance to control the well plate position in x dimension
+        stepper_motor_y: StepperMotor class instance to control the well plate position in y dimension
     """
     pass
 
@@ -22,16 +25,6 @@ def create_error(error, direction, stepper_motor):
         direction: motor direction (True or False)
         stepper_motor: StepperMotor class instance to control the motor position
     """
-    pass
-
-
-class CameraMock:
-    """Mock class for testing"""
-    pass
-
-
-class StepperMotorMock:
-    """Mock class for testing"""
     pass
 
 
