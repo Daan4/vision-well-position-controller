@@ -1,0 +1,2 @@
+class PiCameraError(BaseException):
+    pass
