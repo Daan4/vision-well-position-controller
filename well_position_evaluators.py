@@ -2,11 +2,16 @@ from abc import abstractmethod, ABC
 import cv2
 import numpy as np
 
+# todo maybe implement some other evaluators in opencv?
+# todo create python wrapper for operators_basic.cpp library -> https://docs.python.org/3.6/extending/extending.html
+# todo write functions to convert opencv.Mat to evdk images and vice versa
+
 
 class WellPositionEvaluator(ABC):
     @abstractmethod
     def __init__(self, debug):
-        pass
+        self.centroid = None  # If a centroid is found in the evaluate function it can be stored here.
+                              # The centroids are used during calibration to determine the target.
 
     @abstractmethod
     def evaluate(self, img, target):
@@ -60,8 +65,10 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # Make a copy when debug mode is on so that we can overlay the results on it later.
             original = img.copy()
 
+        # todo convert to grayscale
+
         # Gaussian filter
-        blur_kernelsize = (25, 25)
+        blur_kernelsize = (25, 25)  # todo scale this with resolution
         blur_sigma = 100
         img = cv2.GaussianBlur(img, blur_kernelsize, blur_sigma)
         if self.debug:
@@ -91,7 +98,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cv2.imshow('Threshold', img)
 
         # Morphology
-        open_kernelsize = (50, 50)
+        open_kernelsize = (50, 50)  # todo scale this with resolution
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, open_kernelsize)
         img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
         if self.debug:
@@ -138,6 +145,6 @@ if __name__ == '__main__':
     # Test WellBottomFeaturesEvaluator with a test image
     #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
     imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
-    x = WellBottomFeaturesEvaluator(False)
+    x = WellBottomFeaturesEvaluator(True)
     print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
     cv2.waitKey(0)
