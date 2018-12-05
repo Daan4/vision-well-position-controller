@@ -10,3 +10,6 @@ class PiCamera:
 
     def capture(self, *args, **kwargs):
         pass
+
+    def capture_continuous(self, *args, **kwargs):
+        pass
