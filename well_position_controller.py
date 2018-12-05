@@ -1,12 +1,13 @@
 import numpy as np
 import csv
 import os
-from camera import Camera
+from camera import PiVideoStream
 from motor import Motor
 from well_position_evaluators import WellBottomFeaturesEvaluator
+from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 
 
-class WellPositionController:
+class WellPositionController(QThread):
     """
     Controls well positioning in the following manner:
     1) Move to the next well coordinates using preset setpoints (feedforward)
@@ -16,6 +17,11 @@ class WellPositionController:
 
     This class supports multiple scoring algorithms that can be weighted differently
     """
+    sig_msg = pyqtSignal(str)
+    ready = pyqtSignal()
+    name = "WellPositionController"
+    data = None
+
     def __init__(self, setpoints_csv, camera, motor_x, motor_y, max_offset, *evaluators, target_coordinates=None):
         """
         Args:
@@ -27,6 +33,7 @@ class WellPositionController:
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
         """
+        super().__init__()
         self.setpoints_csv_filename = setpoints_csv
         self.setpoints = self.load_setpoints_from_csv(setpoints_csv)
         self.evaluators = evaluators
@@ -35,6 +42,9 @@ class WellPositionController:
         self.motor_x = motor_x
         self.motor_y = motor_y
         self.max_offset = max_offset
+
+    def __del__(self):
+        self.wait()
 
     def load_setpoints_from_csv(self, filename):
         self.setpoints_csv_filename = filename
@@ -114,7 +124,8 @@ class WellPositionController:
             passed = False
             while not passed:
                 # Use camera feedback to improve position until it passes
-                img = self.camera.capture_raw_image()
+                #img = self.camera.capture_raw_image()
+                # todo acquire img frame from pivideostream somehow
                 result = self.evaluate_position(img)
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
@@ -133,17 +144,8 @@ class WellPositionController:
         with open(offsets_csv_path, 'w') as f:
             f.writelines([f"{x[0]}, {x[1]}" for x in new_offsets])
 
-    def start(self):
-        """
-        Start control loop.
-        """
+    def run(self):
         self.control_loop()
-
-    def stop(self):
-        """
-        Stop control loop.
-        """
-        pass
 
 
 if __name__ == '__main__':
