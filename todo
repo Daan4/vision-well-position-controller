@@ -1,0 +1,10 @@
+vision algorithm support multiple resolutions
+
+implement more evaluators
+implement evaluators in c++
+try reducing c call overhead? Data transfer for 3000x2000 pixels takes ~50ms
+transfer data for 600x400 takes <1ms tho
+
+use QThread, slots and signals for position controller
+
+get some main function / interface going
