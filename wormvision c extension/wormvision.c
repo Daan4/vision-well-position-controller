@@ -1,8 +1,11 @@
-//#include "../venv/Include/Python.h"
-#include "D:/Program Files/Python36/include/Python.h"
-#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
+// desktop includes
+//#include "D:/Program Files/Python36/include/Python.h"
+//#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
 
-//https://mail.python.org/pipermail/python-list/2008-June/501130.html
+// laptop includes
+#include "../venv/Include/Python.h"
+#include "operators_basic.h"
+
 
 // Create an image_t struct from python arguments
 // Inputs: self -> WellBottomFeaturesEvaluator instance
@@ -11,23 +14,18 @@
 //         rows -> image row count
 // Returns: pointer to image_t struct with given imgdata, cols and rows
 image_t *newBasicImagePython(PyObject *data, int32_t cols, int32_t rows) {
+    // Create image_t struct
+    image_t *img = newBasicImage(cols, rows);
+
+    if(img == NULL) { return NULL; }
     // Parse data from python list to c array
-    uint8_t *imgdata = (uint8_t *) malloc(rows * cols * sizeof(uint8_t *));
-    if(data == NULL) { return NULL; }
     // printf("data\n");
     for(int32_t i=0; i<rows*cols; i++) {
-        imgdata[i] = (uint8_t) PyLong_AsLong(PyList_GetItem(data, i));
-        // printf("%d\n", imgdata[i]);
+        img->data[i] = (basic_pixel_t) PyLong_AsLong(PyList_GetItem(data, i));
+        // printf("%d\n", img->data[i]);
     }
-    // Create image_t struct
     // printf("rows %d cols %d\n", rows, cols);
-    image_t *img = (image_t *)malloc(sizeof(image_t));
-    if(img == NULL) { return NULL; }
-    img->view = IMGVIEW_CLIP;
-    img->type = IMGTYPE_BASIC;
-    img->cols = cols;
-    img->rows = rows;
-    img->data = imgdata;
+    rotate180(img);
     return(img);
 }
 

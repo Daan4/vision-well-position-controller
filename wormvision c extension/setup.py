@@ -7,10 +7,19 @@ setup(
     ext_modules=[
         Extension(
             "wormvision",
-            sources=["wormvision.c"],
+            sources=["wormvision.c",
+                     "operators_basic.c",
+                     "operators.c",
+                     "operators_float.c",
+                     "operators_int16.c",
+                     "operators_rgb565.c",
+                     "operators_rgb888.c"],
             py_limited_api=True)
     ]
 )
+# steps to fix operators_basic.c and operators.c:
+# replace #warning by // #warning
+#
 
 # build (from outside venv) with python setup.py build
 # install (from within venv) with python setup.py install
