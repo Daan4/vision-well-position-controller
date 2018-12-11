@@ -25,7 +25,6 @@ image_t *newBasicImagePython(PyObject *data, int32_t cols, int32_t rows) {
         // printf("%d\n", img->data[i]);
     }
     // printf("rows %d cols %d\n", rows, cols);
-    rotate180(img);
     return(img);
 }
 
