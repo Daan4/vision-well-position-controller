@@ -22,6 +22,21 @@
 #include "operators_rgb565.h"
 #include "math.h"
 
+// unique operator: watershed transformation
+uint32_t waterShed(const image_t *src,
+                         image_t *dst,
+                         const eConnected connected,
+                         basic_pixel_t minh,
+                         basic_pixel_t maxh) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        return waterShed_basic(src, dst, connected, minh, maxh);
+    default:
+        fprintf(stderr, "waterShed(): image type %d not yet implemented\n", src->type);
+        return 0;
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Function implementations
 // ----------------------------------------------------------------------------
@@ -485,6 +500,16 @@ void invert( const image_t *src, image_t *dst)
     fp[src->type](src, dst);
 }
 
+void gamma( const image_t *src, image_t *dst, const float c, const float g) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        gamma_basic(src, dst, c, g);
+        break;
+    default:
+        fprintf(stderr, "gamma(): image type %d not yet implemented\n", src->type);
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Filters
 // ----------------------------------------------------------------------------
@@ -508,6 +533,74 @@ void nonlinearFilter( const image_t *src
     default:
         fprintf(stderr, "nonlinearFilter(): image type %d not supported\n", src->type);
     break;
+    }
+}
+
+void gaussianBlur( const image_t *src
+                 ,       image_t *dst
+                 , const int32_t kernelSize
+                   , const double sigma) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        gaussianBlur_basic(src, dst, kernelSize, sigma);
+        break;
+    default:
+        fprintf(stderr, "gaussianBlur(): image type %d not yet implemented\n", src->type);
+    }
+}
+
+void convolution( const image_t *src
+                ,       image_t *dst
+                  , const image_t *kernel) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        convolution_basic(src, dst, kernel);
+        break;
+    default:
+        fprintf(stderr, "convolution(): image type %d not yet implemented\n", src->type);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Morphology
+// ----------------------------------------------------------------------------
+void morph_erode(const image_t *src, image_t *dst, const image_t *kernel) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        erode_basic(src, dst, kernel);
+        break;
+    default:
+        fprintf(stderr, "erode(): image type %d not yet implemented\n", src->type);
+    }
+}
+
+void morph_dilate(const image_t *src, image_t *dst, const image_t *kernel) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        dilate_basic(src, dst, kernel);
+        break;
+    default:
+        fprintf(stderr, "dilate(): image type %d not yet implemented\n", src->type);
+    }
+}
+
+void morph_open(const image_t *src, image_t *dst, const image_t *kernel) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        open_basic(src, dst, kernel);
+        break;
+    default:
+        fprintf(stderr, "open(): image type %d not yet implemented\n", src->type);
+    }
+}
+
+void morph_close(const image_t *src, image_t *dst, const image_t *kernel) {
+    switch(src->type) {
+    case IMGTYPE_BASIC:
+        close_basic(src, dst, kernel);
+        break;
+    default:
+        fprintf(stderr, "close(): image type %d not yet implemented\n", src->type);
     }
 }
 

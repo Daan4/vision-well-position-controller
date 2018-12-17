@@ -18,6 +18,13 @@
 #include "stdint.h"
 #include "operators.h"
 
+// unique operator: watershed transformation
+uint32_t waterShed_basic(const image_t *src,
+                         image_t *dst,
+                         const eConnected connected,
+                         basic_pixel_t minh,
+                         basic_pixel_t maxh);
+
 // ----------------------------------------------------------------------------
 // Function prototypes
 // ----------------------------------------------------------------------------
@@ -41,6 +48,7 @@ void rotate180_basic( const image_t *img );
 // ----------------------------------------------------------------------------
 // Thresholding
 // ----------------------------------------------------------------------------
+
 
 void threshold_basic( const image_t *src
                     ,       image_t *dst
@@ -93,7 +101,7 @@ void multiply_basic( const image_t *src, image_t *dst );
 
 void invert_basic( const image_t *src, image_t *dst);
 
-void gamma_basic( const image_t *src, image_t *dst, const int8_t c, const int8_t g);
+void gamma_basic( const image_t *src, image_t *dst, const float c, const float g);
 
 
 // ----------------------------------------------------------------------------
@@ -108,8 +116,23 @@ void nonlinearFilter_basic( const image_t *src
 
 void gaussianBlur_basic( const image_t *src
                        ,       image_t *dst
-                       , const uint8_t kernelSize
-                       , const uint8_t sigma);
+                       , const int32_t kernelSize
+                       , const double sigma);
+
+void convolution_basic( const image_t *src
+                      , const image_t *dst
+                        , const image_t *kernel);
+
+// ----------------------------------------------------------------------------
+// Morphology
+// ----------------------------------------------------------------------------
+void erode_basic(const image_t *src, image_t *dst, const image_t *kernel);
+
+void dilate_basic(const image_t *src, image_t *dst, const image_t *kernel);
+
+void open_basic(const image_t *src, image_t *dst, const image_t *kernel);
+
+void close_basic(const image_t *src, image_t *dst, const image_t *kernel);
 
 // ----------------------------------------------------------------------------
 // Binary

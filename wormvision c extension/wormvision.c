@@ -1,11 +1,13 @@
 // desktop includes
-//#include "D:/Program Files/Python36/include/Python.h"
-//#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
+#include "D:/Program Files/Python36/include/Python.h"
+#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
 
 // laptop includes
-#include "../venv/Include/Python.h"
-#include "operators_basic.h"
+//#include "../venv/Include/Python.h"
+//#include "operators_basic.h"
 
+// Manually define M_PI
+#define M_PI		3.14159265358979323846
 
 // Create an image_t struct from python arguments
 // Inputs: self -> WellBottomFeaturesEvaluator instance
@@ -45,13 +47,94 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     if(!PyArg_ParseTuple(args, "O!iiO!", &PyList_Type, &imgdata_list,
                           &imgcols, &imgrows, &PyTuple_Type, &target_tuple)) { return NULL; }
     // Parse args to image_t struct
-    image_t *img = newBasicImagePython(imgdata_list, imgcols, imgrows);
+    image_t *src = newBasicImagePython(imgdata_list, imgcols, imgrows);
     // Parse target from python tuple to array
     target[0] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 0));
     target[1] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 1));
     // printf("target %d, %d\n", target[0], target[1]);
 
-    Py_RETURN_NONE;
+    image_t *dst = newBasicImage(src->cols, src->rows);
+
+    // 1. Gaussian blur
+    int32_t kernel_size = 25;
+    double sigma = 100;
+    gaussianBlur(src, src, kernel_size, sigma);
+
+    // 2. Contrast stretch
+    contrastStretchFast(src, src);
+
+    // 3. Gamma
+    float c = 2.0f;
+    float g = 4.0f;
+    gamma(src, src, c, g);
+
+    // 4. Otsu threshold
+    thresholdOtsu(src, src, BRIGHT);
+
+    // 5. Morphology
+    // first generate 49x49 ellipse (ish?) kernel. note: not quite the same as opencv kernel yet
+    int32_t radius = 25;
+    image_t *kernel = newBasicImage(2*radius-1, 2*radius-1);
+    kernel->view = IMGVIEW_BINARY;
+    uint32_t i = (2*radius-1) * (2*radius-1);
+    int32_t row = 0;
+    int32_t col = 0;
+    basic_pixel_t *k = (basic_pixel_t *) kernel->data;
+    while(i-- > 0) {
+        if((int32_t) (sqrt((row-radius+1)*(row-radius+1) + (col-radius+1)*(col-radius+1)) + 0.5) < radius) {
+            *k++ = 1;
+        } else {
+            *k++ = 0;
+        }
+        if(++col == kernel->cols) {
+            col = 0;
+            row++;
+        }
+    }
+    morph_open(src, dst, kernel);
+
+    // 6. Labelling, feature extraction, classification to select correct blob
+    uint32_t blob_count;
+    blob_count = labelBlobs(dst, dst, EIGHT);
+    float metric_threshold = 0.8f;
+    float metric;
+    int32_t largest_area_above_threshold = -1;
+    int8_t best_match = -1;
+    blobinfo_t info;
+    for(i = 1; i <= blob_count; i++) {
+        blobAnalyse(dst, i, &info);
+        metric = 4 * M_PI * info.nof_pixels / (info.perimeter * info.perimeter);
+        if(metric > metric_threshold && info.nof_pixels > largest_area_above_threshold) {
+            largest_area_above_threshold = info.nof_pixels;
+            best_match = i;
+        }
+    }
+    if(best_match == -1) {
+        // no valid blob found
+        // return None
+        Py_RETURN_NONE;
+    }
+
+    // 7. Calculate centroid / offset
+//    int32_t cc, rc;
+//    int32_t offset_x, offset_y;
+//    centroid(dst, best_match, &cc, &rc);
+//    offset_x = target[0] - cc;
+//    offset_y = target[1] - rc;
+
+    // Cleanup
+    deleteImage(src);
+    deleteImage(dst);
+    deleteImage(kernel);
+
+    int32_t offset_x = 0;
+    int32_t offset_y = 0;
+
+    // Return tuple (offset_x, offset_y)
+    PyObject *offset_tuple = PyTuple_New(2);
+    PyTuple_SetItem(offset_tuple, 0, PyLong_FromLong(offset_x));
+    PyTuple_SetItem(offset_tuple, 1, PyLong_FromLong(offset_y));
+    return offset_tuple;
 }
 
 static PyMethodDef functions[] = {

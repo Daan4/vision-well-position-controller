@@ -143,6 +143,13 @@ typedef struct blobinfo_t
 // Function prototypes
 // ----------------------------------------------------------------------------
 
+// unique operator: watershed transformation
+uint32_t waterShed(const image_t *src,
+                         image_t *dst,
+                         const eConnected connected,
+                         basic_pixel_t minh,
+                         basic_pixel_t maxh);
+
 // ----------------------------------------------------------------------------
 // Memory (de)allocation
 // ----------------------------------------------------------------------------
@@ -348,6 +355,8 @@ void multiply( const image_t *src, image_t *dst );
 // Postcondition: dst is a binary image
 void invert( const image_t *src, image_t *dst);
 
+void gamma( const image_t *src, image_t *dst, const float c, const float g);
+
 
 // ----------------------------------------------------------------------------
 // Filters
@@ -364,6 +373,23 @@ void nonlinearFilter( const image_t *src
                     , const eFilterOperation fo
                     , const uint8_t n
                     );
+
+void gaussianBlur( const image_t *src
+                       ,       image_t *dst
+                       , const int32_t kernelSize
+                       , const double sigma);
+
+void convolution( const image_t *src
+                      , image_t *dst
+                        , const image_t *kernel);
+
+void morph_erode(const image_t *src, image_t *dst, const image_t *kernel);
+
+void morph_dilate(const image_t *src, image_t *dst, const image_t *kernel);
+
+void morph_open(const image_t *src, image_t *dst, const image_t *kernel);
+
+void morph_close(const image_t *src, image_t *dst, const image_t *kernel);
 
 // ----------------------------------------------------------------------------
 // Binary
