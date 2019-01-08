@@ -1,10 +1,14 @@
-vision algorithm support multiple resolutions
+implement more evaluators: done, implemented hough transform, idk what else would be good
+    - maybe add area as a metric for bottom features somehow?
 
-implement more evaluators
-implement evaluators in c++
-try reducing c call overhead? Data transfer for 3000x2000 pixels takes ~50ms
-transfer data for 600x400 takes <1ms tho
+
+implement evaluators in c: done for features algorithm, hough transform will just be in opencv
+    - compare c vs opencv algorithm performance on a raspberry pi
+    - optimize c implementation if needed (morphology seems to be the big one, maybe try a seperable kernel or optimize the function)
+
 
 use QThread, slots and signals for position controller
+    - acquire image frame from pivideostream when required
+    - control motor position asynchronously
 
 get some main function / interface going
