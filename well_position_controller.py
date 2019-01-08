@@ -2,9 +2,11 @@ import numpy as np
 import csv
 import os
 from camera import PiVideoStream
+from time import sleep
 from motor import Motor
 from well_position_evaluators import WellBottomFeaturesEvaluator
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
+import cv2
 
 
 class WellPositionController(QThread):
@@ -22,7 +24,7 @@ class WellPositionController(QThread):
     name = "WellPositionController"
     data = None
 
-    def __init__(self, setpoints_csv, camera, motor_x, motor_y, max_offset, *evaluators, target_coordinates=None):
+    def __init__(self, setpoints_csv, max_offset, *evaluators, target_coordinates=None):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -38,10 +40,9 @@ class WellPositionController(QThread):
         self.setpoints = self.load_setpoints_from_csv(setpoints_csv)
         self.evaluators = evaluators
         self.target = target_coordinates
-        self.camera = camera
-        self.motor_x = motor_x
-        self.motor_y = motor_y
         self.max_offset = max_offset
+        self.request_new_image = False  # Set to True to request a new image frame from PiVideoStream that will be stored in self.img
+        self.img = None
 
     def __del__(self):
         self.wait()
@@ -91,6 +92,23 @@ class WellPositionController(QThread):
         else:
             return offset
 
+    @pyqtSlot(np.ndarray)
+    def img_update(self, image=None):
+        """ Store the latest image frame from PiVideoStream in self.img
+        Only update the image if it's not currently being analyzed
+
+        Args:
+            image: bgr image matrix (opencv compatible)
+        """
+        try:
+            if not self.request_new_image:
+                self.sig_msg.emit(self.name + ": no new image needed, frame dropped.")
+            elif not (image is None):
+                self.img = image.copy()
+                self.request_new_image = False
+        except Exception as err:
+            self.sig_msg.emit(self.name, ": exception in img_update " + str(err))
+
     def control_loop(self):
         """
         Main control loop
@@ -118,15 +136,22 @@ class WellPositionController(QThread):
         new_offsets = []
         for i, setpoint in enumerate(modified_setpoints):
 
-            # todo: feedforward first to move to the next setpoint position
+            # todo: feedforward first to move to the next setpoint position and wait until position is reached
 
             total_error = [0, 0]  # Keep track of the total error so that we can save the new offset for the next run
             passed = False
             while not passed:
                 # Use camera feedback to improve position until it passes
-                #img = self.camera.capture_raw_image()
-                # todo acquire img frame from pivideostream somehow
-                result = self.evaluate_position(img)
+                # Get new image frame
+                self.img = None
+                self.request_new_image = True
+                while self.img is None:
+                    # Wait for new image frame
+                    sleep(0.01)
+                # convert to grayscale
+                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+                # evaluate image
+                result = self.evaluate_position(self.img)
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
                     # continue with the next well
@@ -136,7 +161,6 @@ class WellPositionController(QThread):
                     new_offsets.append(tuple(np.add(total_error, setpoint_offsets[i])))
                 else:
                     total_error = list(np.add(total_error, result))
-
                     # todo feedforward based on newton's method, where the new setpoint is based on the error
                     # basically feedforward by result[0] in x and result[1] in y directions
 
@@ -151,5 +175,5 @@ class WellPositionController(QThread):
 if __name__ == '__main__':
     setpoints_csv_file = "setpoints\\24.csv"
     e = ((WellBottomFeaturesEvaluator(True), 1),)
-    wpc = WellPositionController(setpoints_csv_file, Camera(), Motor(), Motor(), (16, 16), (WellBottomFeaturesEvaluator(True), 1), target_coordinates=(0, 0))
+    wpc = WellPositionController(setpoints_csv_file, (16, 16), (WellBottomFeaturesEvaluator(True), 1), target_coordinates=(0, 0))
     wpc.start()
