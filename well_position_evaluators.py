@@ -29,9 +29,6 @@ class WellPositionEvaluator(ABC):
 
 
 class HoughTransformEvaluator(WellPositionEvaluator):
-    # todo
-    # current implementation assumes 410x308 resolution
-    # scale vision parameters accordingly according to actual resolution
     def __init__(self, resolution, debug=False):
         super().__init__(debug)
         # Set up debug windows if debug mode is on
@@ -51,6 +48,27 @@ class HoughTransformEvaluator(WellPositionEvaluator):
             cv2.resizeWindow('Result', self.img_width, self.img_height)
             cv2.moveWindow('Result', 1280, 100)
 
+        # Evaluation function parameters, scaled by image width if needed
+        # parameters were originally determined for resolution of 410x308
+        # blur
+        self.blur_kernelsize = (25, 25)
+        self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410))
+        self.blur_sigma = 100
+
+        # gamma
+        self.c = 1
+        self.gamma = 5
+
+        # hough
+        self.min_radius = 50
+        self.min_radius *= self.img_width / 410
+        self.max_radius = 100
+        self.max_radius *= self.img_width / 410
+        self.min_distance = 50
+        self.min_distance *= self.img_width / 410
+        self.param1 = 25  # = higher threshold passed to canny, lower threshold is half of this
+        self.param2 = 50  # = accumulator threshold -> smaller might result in more (and smaller) circles
+
     def evaluate(self, img, target):
         """ Finds the position error by using the Hough transform function in opencv
 
@@ -63,9 +81,7 @@ class HoughTransformEvaluator(WellPositionEvaluator):
             original = img.copy()
 
         # Gaussian filter
-        blur_kernelsize = (25, 25)  # todo scale this with resolution?
-        blur_sigma = 100
-        img = cv2.GaussianBlur(img, blur_kernelsize, blur_sigma)
+        img = cv2.GaussianBlur(img, self.blur_kernelsize, self.blur_sigma)
         if self.debug:
             cv2.imshow('Blur', img)
 
@@ -79,23 +95,16 @@ class HoughTransformEvaluator(WellPositionEvaluator):
 
         # Gamma
         # NOTE: img is a float image at this point
-        c = 1
-        gamma = 5
-        img = np.power(img, gamma)
-        img = np.multiply(img, c * 255)
+        img = np.power(img, self.gamma)
+        img = np.multiply(img, self.c * 255)
         np.putmask(img, img > 255, 255)
         img = img.astype(np.uint8)
         if self.debug:
             cv2.imshow('Gamma', img)
 
         # Hough transform
-        min_radius = 50  # todo scale with resolution?
-        max_radius = 100  # todo scale with resolution?
-        min_distance = 50  # todo scale with resolution?
-        param1 = 25  # = higher threshold passed to Canny, lower threshold is half
-        param2 = 50  # = accumulator threshold -> smaller might result in more small circles
-        circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, min_distance,
-                                   param1=param1, param2=param2, minRadius=min_radius, maxRadius=max_radius)
+        circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, self.min_distance, param1=self.param1,
+                                   param2=self.param2, minRadius=self.min_radius, maxRadius=self.max_radius)
 
         # Calculate and return the offset
         # If 0 circles are found return none
@@ -122,9 +131,8 @@ class HoughTransformEvaluator(WellPositionEvaluator):
 
 class WellBottomFeaturesEvaluator(WellPositionEvaluator):
     # todo
-    # current implementation assumes 410x308 resolution
-    # scale vision parameters accordingly to actual resolution
     # note: c vision parameters are currently not passed, so also change the c library
+    # -> pass them
     def __init__(self, resolution, debug=False):
         super().__init__(debug)
         # Set up debug windows if debug mode is on
@@ -152,6 +160,24 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cv2.resizeWindow('Result', self.img_width, self.img_height)
             cv2.moveWindow('Result', 50, 500)
 
+        # Evaluation function parameters, scaled by image width if needed
+        # parameters were originally determined for resolution of 410x308
+        # blur
+        self.blur_kernelsize = (25, 25)  # Has to be a square (for c implementation)
+        self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410).astype(int))
+        self.blur_sigma = 100
+
+        # gamma
+        self.c = 2
+        self.gamma = 6
+
+        # morphology
+        self.open_kernelsize = (49, 49)  # Has to be a square (for c implementation)
+        self.open_kernelsize = tuple(np.multiply(self.open_kernelsize, self.img_width / 410).astype(int))
+
+        # classification
+        self.metric_threshold = 0.8
+
     def evaluate(self, img, target=(0, 0), benchmarking=False):
         """ Finds the position error by finding the well bottom centroid.
         If self.debug = True, opencv is used instead of the c library
@@ -170,7 +196,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cols = img.shape[1]
             rows = img.shape[0]
             data = list(img.flat)
-            return wormvision.WBFE_evaluate(data, cols, rows, target)
+            return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
+                                            self.open_kernelsize[0], self.metric_threshold)
         else:
             if benchmarking:
                 self.debug = False # dont show live images when benchmarking
@@ -180,9 +207,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 original = img.copy()
 
             # Gaussian filter
-            blur_kernelsize = (25, 25)  # todo scale this with resolution?
-            blur_sigma = 100
-            img = cv2.GaussianBlur(img, blur_kernelsize, blur_sigma)
+            img = cv2.GaussianBlur(img, self.blur_kernelsize, self.blur_sigma)
             if self.debug:
                 cv2.imshow('Blur', img)
 
@@ -196,10 +221,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
             # Gamma
             # NOTE: img is a float image at this point
-            c = 2
-            gamma = 6
-            img = np.power(img, gamma)
-            img = np.multiply(img, c * 255)
+            img = np.power(img, self.gamma)
+            img = np.multiply(img, self.c * 255)
             np.putmask(img, img > 255, 255)
             img = img.astype(np.uint8)
             if self.debug:
@@ -211,8 +234,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 cv2.imshow('Threshold', img)
 
             # Morphology
-            open_kernelsize = (49, 49)  # todo scale this with resolution
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, open_kernelsize)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.open_kernelsize)
             img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
             if self.debug:
                 cv2.imshow('Morphology', img)
@@ -221,7 +243,6 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # By looking at region features
             # step 1: Keep only blobs that score above roundness threshold
             # step 2: Keep largest blob remaining after step 1
-            metric_threshold = 0.8
             largest_area_above_threshold = -1
             best_match = None
             im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -229,7 +250,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 area = cv2.contourArea(c)
                 perimeter = cv2.arcLength(c, True)
                 metric = 4 * np.pi * area / perimeter ** 2
-                if metric > metric_threshold and area > largest_area_above_threshold:
+                if metric > self.metric_threshold and area > largest_area_above_threshold:
                     largest_area_above_threshold = area
                     best_match = c
 
@@ -256,51 +277,60 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
 
 def test_wellbottomfeaturesevaluator():
-    # Test WellBottomFeaturesEvaluator with a test image
-    # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
-    # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
-    imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+    benchmarking = False
 
-    # benchmark opencv vs c
-    runtimes_c = []
-    runtimes_opencv = []
+    if benchmarking:
+        # Test WellBottomFeaturesEvaluator with a test image
+        # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
+        # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
+        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        # benchmark opencv vs c
+        runtimes_c = []
+        runtimes_opencv = []
 
-    x = WellBottomFeaturesEvaluator((410, 308), False)
-    for _ in range(10):
-        start = timeit.default_timer()
-        print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
-        stop = timeit.default_timer()
-        print(f'Time C ({_+1}): {stop-start}')
-        runtimes_c.append(stop - start)
+        x = WellBottomFeaturesEvaluator((410, 308), False)
+        for _ in range(10):
+            start = timeit.default_timer()
+            print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
+            stop = timeit.default_timer()
+            print(f'Time C ({_+1}): {stop-start}')
+            runtimes_c.append(stop - start)
 
-    x.debug = True
-    for _ in range(10):
-        start = timeit.default_timer()
-        print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True))
-        stop = timeit.default_timer()
-        print(f'Time opencv ({_+1}): {stop-start}')
-        runtimes_opencv.append(stop - start)
+        x.debug = True
+        for _ in range(10):
+            start = timeit.default_timer()
+            print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True))
+            stop = timeit.default_timer()
+            print(f'Time opencv ({_+1}): {stop-start}')
+            runtimes_opencv.append(stop - start)
 
-    print('avg time c: ', sum(runtimes_c) / len(runtimes_c))
-    print('avg time opencv: ', sum(runtimes_opencv) / len(runtimes_opencv))
+        print('avg time c: ', sum(runtimes_c) / len(runtimes_c))
+        print('avg time opencv: ', sum(runtimes_opencv) / len(runtimes_opencv))
 
-    """ benchmark results avg over 10 attempts (on my home pc):
-        opencv: 0.023s
-        c: 1.2s
-        c (no gaussian blur): 0.98s (->gaussian blur takes ~0.22s), note: no blob found so no centroid/return value either
-        c (no contrast stretch): 1.2s (->does not contribute significantly to runtime)
-        c (no gamma): 1.13s (->gamma takes ~0.07s)
-        c (no threshold): 1.14s (->otsu takes ~0.06s)
-        c (no morph): 0.24s (->morphology takes ~0.96s), note: no blob found so no centroid/return value either
-        c (no label/features/classify): 1.2s (->does not contribute significantly to runtime)
-        c (no centroid finding): 1.2s (->does not contribute significantly to runtime)
+        """ benchmark results avg over 10 attempts (on my home pc):
+            opencv: 0.023s
+            c: 1.2s
+            c (no gaussian blur): 0.98s (->gaussian blur takes ~0.22s), note: no blob found so no centroid/return value either
+            c (no contrast stretch): 1.2s (->does not contribute significantly to runtime)
+            c (no gamma): 1.13s (->gamma takes ~0.07s)
+            c (no threshold): 1.14s (->otsu takes ~0.06s)
+            c (no morph): 0.24s (->morphology takes ~0.96s), note: no blob found so no centroid/return value either
+            c (no label/features/classify): 1.2s (->does not contribute significantly to runtime)
+            c (no centroid finding): 1.2s (->does not contribute significantly to runtime)
+    
+            conclusion: using opencv very much preferred, already super optimized in python.
+                        could probably speed c algorithm up significantly to <0.2s at the very least, but is it worth the effort?
+                        doubt 0.02 is attainable in the given timespan
+        """
 
-        conclusion: using opencv very much preferred, already super optimized in python.
-                    could probably speed c algorithm up significantly to <0.2s at the very least, but is it worth the effort?
-                    doubt 0.02 is attainable in the given timespan
-    """
-
-    cv2.waitKey(0)
+        cv2.waitKey(0)
+    else:
+        # single run to compare c vs opencv result
+        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        x = WellBottomFeaturesEvaluator((410, 308), True)
+        print(f'opencv: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True)}')
+        x.debug = False
+        print(f'c: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)}')
 
 
 def test_houghtransformevaluator():
@@ -315,5 +345,5 @@ def test_houghtransformevaluator():
 
 
 if __name__ == '__main__':
-    #test_wellbottomfeaturesevaluator()
-    test_houghtransformevaluator()
+    test_wellbottomfeaturesevaluator()
+    #test_houghtransformevaluator()

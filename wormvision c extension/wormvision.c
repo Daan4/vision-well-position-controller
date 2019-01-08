@@ -37,35 +37,56 @@ image_t *newBasicImagePython(PyObject *data, int32_t cols, int32_t rows) {
 //         imgcols -> image col count
 //         imgrows -> image row count
 //         target -> tuple with target coordinates {x, y}
+//         blur_kernelsize -> kernel size for blur
+//         blur_sigma -> sigma for blur
+//         c -> constant for gamma operation
+//         gamma -> constant for gamma operation
+//         open_kernelsize -> morphology kernel size
+//         metric_threshold -> threshold for classification
 // Returns: Python tuple with (found offset, found centroid)
 static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     PyObject *imgdata_list;
     int32_t imgrows;
     int32_t imgcols;
+    int32_t kernel_size;
+    double sigma;
+    float c;
+    float g;
+    int32_t morphology_kernel_size;
+    float metric_threshold;
+
     PyObject *target_tuple;
     int32_t target[2];
-    if(!PyArg_ParseTuple(args, "O!iiO!", &PyList_Type, &imgdata_list,
-                          &imgcols, &imgrows, &PyTuple_Type, &target_tuple)) { return NULL; }
+    if(!PyArg_ParseTuple(args, "O!iiO!idffif", &PyList_Type, &imgdata_list,
+                          &imgcols, &imgrows, &PyTuple_Type, &target_tuple,
+                          &kernel_size, &sigma, &c, &g, &morphology_kernel_size,
+                          &metric_threshold)) { return NULL; }
     // Parse args to image_t struct
     image_t *src = newBasicImagePython(imgdata_list, imgcols, imgrows);
     // Parse target from python tuple to array
     target[0] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 0));
     target[1] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 1));
-    // printf("target %d, %d\n", target[0], target[1]);
+
+    // uncomment to print arguments for testing
+//    printf("target %d, %d\n", target[0], target[1]);
+//    printf("blurkernelsize %d\n", kernel_size);
+//    printf("sigma %f\n", sigma);
+//    printf("c %f\n", c);
+//    printf("g %f\n", g);
+//    printf("morphkernelsize %d\n", morphology_kernel_size);
+//    printf("metric_threshold %f\n", metric_threshold);
+
+
 
     image_t *dst = newBasicImage(src->cols, src->rows);
 
     // 1. Gaussian blur
-    int32_t kernel_size = 25;
-    double sigma = 100;
     gaussianBlur(src, src, kernel_size, sigma);
 
     // 2. Contrast stretch
     contrastStretchFast(src, src);
 
     // 3. Gamma
-    float c = 2.0f;
-    float g = 4.0f;
     gamma(src, src, c, g);
 
     // 4. Otsu threshold
@@ -73,7 +94,7 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
 
     // 5. Morphology
     // first generate 49x49 ellipse (ish?) kernel. note: not quite the same as opencv kernel yet
-    int32_t radius = 25;
+    int32_t radius = (int32_t) (morphology_kernel_size / 2.0f + 0.5);
     image_t *kernel = newBasicImage(2*radius-1, 2*radius-1);
     kernel->view = IMGVIEW_BINARY;
     uint32_t i = (2*radius-1) * (2*radius-1);
@@ -96,7 +117,6 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     // 6. Labelling, feature extraction, classification to select correct blob
     uint32_t blob_count;
     blob_count = labelBlobs(dst, dst, EIGHT);
-    float metric_threshold = 0.8f;
     float metric;
     int32_t largest_area_above_threshold = -1;
     int8_t best_match = -1;
@@ -116,19 +136,16 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     }
 
     // 7. Calculate centroid / offset
-//    int32_t cc, rc;
-//    int32_t offset_x, offset_y;
-//    centroid(dst, best_match, &cc, &rc);
-//    offset_x = target[0] - cc;
-//    offset_y = target[1] - rc;
+    int32_t cc, rc;
+    int32_t offset_x, offset_y;
+    centroid(dst, best_match, &cc, &rc);
+    offset_x = target[0] - cc;
+    offset_y = target[1] - rc;
 
     // Cleanup
     deleteImage(src);
     deleteImage(dst);
     deleteImage(kernel);
-
-    int32_t offset_x = 0;
-    int32_t offset_y = 0;
 
     // Return tuple (offset_x, offset_y)
     PyObject *offset_tuple = PyTuple_New(2);
