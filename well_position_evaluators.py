@@ -4,8 +4,6 @@ import numpy as np
 import wormvision
 import timeit
 
-# todo maybe implement some other evaluators in opencv?-
-
 
 class WellPositionEvaluator(ABC):
     @abstractmethod
@@ -30,37 +28,142 @@ class WellPositionEvaluator(ABC):
         pass
 
 
-class WellBottomFeaturesEvaluator(WellPositionEvaluator):
+class HoughTransformEvaluator(WellPositionEvaluator):
     # todo
     # current implementation assumes 410x308 resolution
-    # scale vision parameters accordingly to actual rpi camera resolution
-    def __init__(self, debug=False):
+    # scale vision parameters accordingly according to actual resolution
+    def __init__(self, resolution, debug=False):
         super().__init__(debug)
         # Set up debug windows if debug mode is on
         self.debug = debug
         self.centroid = None
+        self.img_width, self.img_height = resolution
         if self.debug:
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Blur', 410, 308)
+            cv2.resizeWindow('Blur', self.img_width, self.img_height)
             cv2.moveWindow('Blur', 50, 100)
 
             cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Gamma', 410, 308)
+            cv2.resizeWindow('Gamma', self.img_width, self.img_height)
+            cv2.moveWindow('Gamma', 460, 100)
+
+            cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Result', self.img_width, self.img_height)
+            cv2.moveWindow('Result', 1280, 100)
+
+    def evaluate(self, img, target):
+        """ Finds the position error by using the Hough transform function in opencv
+
+        Args:
+            img: 2d grayscale image list
+            target: target coordinates (topleft pixel is 0,0)
+        """
+        if self.debug:
+            # make a copy when debug mode is on, so that we can overlay the results on the original image
+            original = img.copy()
+
+        # Gaussian filter
+        blur_kernelsize = (25, 25)  # todo scale this with resolution?
+        blur_sigma = 100
+        img = cv2.GaussianBlur(img, blur_kernelsize, blur_sigma)
+        if self.debug:
+            cv2.imshow('Blur', img)
+
+        # Auto contrast
+        _min = np.min(img)
+        _max = np.max(img)
+        img = np.subtract(img, _min)
+        img = np.divide(img, (_max - _min))
+        img = np.multiply(img, 255)
+        cv2.normalize(img, img, 1, 0, cv2.NORM_MINMAX)
+
+        # Gamma
+        # NOTE: img is a float image at this point
+        c = 1
+        gamma = 5
+        img = np.power(img, gamma)
+        img = np.multiply(img, c * 255)
+        np.putmask(img, img > 255, 255)
+        img = img.astype(np.uint8)
+        if self.debug:
+            cv2.imshow('Gamma', img)
+
+        # Hough transform
+        min_radius = 50  # todo scale with resolution?
+        max_radius = 100  # todo scale with resolution?
+        min_distance = 50  # todo scale with resolution?
+        param1 = 25  # = higher threshold passed to Canny, lower threshold is half
+        param2 = 50  # = accumulator threshold -> smaller might result in more small circles
+        circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, min_distance,
+                                   param1=param1, param2=param2, minRadius=min_radius, maxRadius=max_radius)
+
+        # Calculate and return the offset
+        # If 0 circles are found return none
+        # If more than 1 circle is found, either assume the best match or return none (todo which is best?)
+        offset = None
+        if circles is None:
+            self.centroid = None
+            if self.debug:
+                cv2.imshow('Result', original)
+        else:
+            if self.debug:
+                # Display found circles
+                for i in circles[0, :]:
+                    # outer circle
+                    cv2.circle(original, (i[0], i[1]), i[2], (0, 255, 0), 2)
+                    # center
+                    cv2.circle(original, (i[0], i[1]), 2, (0, 0, 255), 3)
+                    cv2.imshow('Result', original)
+            # assume circle at index 0 is the best match
+            self.centroid = (circles[0, 0, 0], circles[0, 0, 1])
+            offset = tuple(np.subtract(target, self.centroid))
+        return offset
+
+
+class WellBottomFeaturesEvaluator(WellPositionEvaluator):
+    # todo
+    # current implementation assumes 410x308 resolution
+    # scale vision parameters accordingly to actual resolution
+    # note: c vision parameters are currently not passed, so also change the c library
+    def __init__(self, resolution, debug=False):
+        super().__init__(debug)
+        # Set up debug windows if debug mode is on
+        self.debug = debug
+        self.centroid = None
+        self.img_width, self.img_height = resolution
+        if self.debug:
+            cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Blur', self.img_width, self.img_height)
+            cv2.moveWindow('Blur', 50, 100)
+
+            cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Gamma', self.img_width, self.img_height)
             cv2.moveWindow('Gamma', 460, 100)
 
             cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Threshold', 410, 308)
+            cv2.resizeWindow('Threshold', self.img_width, self.img_height)
             cv2.moveWindow('Threshold', 870, 100)
 
             cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Morphology', 410, 308)
+            cv2.resizeWindow('Morphology', self.img_width, self.img_height)
             cv2.moveWindow('Morphology', 1280, 100)
 
             cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Result', 410, 308)
+            cv2.resizeWindow('Result', self.img_width, self.img_height)
             cv2.moveWindow('Result', 50, 500)
 
     def evaluate(self, img, target=(0, 0), benchmarking=False):
+        """ Finds the position error by finding the well bottom centroid.
+        If self.debug = True, opencv is used instead of the c library
+
+        Args:
+            img: 2d grayscale image list
+            target: target coordinates (topleft pixel is 0,0)
+            benchmarking: set to true to hide windows when using opencv
+
+        Returns: offset tuple (x, y) position error
+
+        """
         if not self.debug:
             # use custom vision library
             # convert img to 1d list
@@ -76,10 +179,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 # Make a copy when debug mode is on so that we can overlay the results on it later.
                 original = img.copy()
 
-            # todo convert to grayscale
-
             # Gaussian filter
-            blur_kernelsize = (25, 25)  # todo scale this with resolution
+            blur_kernelsize = (25, 25)  # todo scale this with resolution?
             blur_sigma = 100
             img = cv2.GaussianBlur(img, blur_kernelsize, blur_sigma)
             if self.debug:
@@ -142,46 +243,43 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 M = cv2.moments(best_match)
                 cX = int(M["m10"] / M["m00"])
                 cY = int(M["m01"] / M["m00"])
-                centroid = (cX, cY)
-                offset = tuple(np.subtract(target, centroid))
-                self.centroid = centroid
+                self.centroid = (cX, cY)
+                offset = tuple(np.subtract(target, self.centroid))
                 if self.debug:
                     # Overlay results on source image and display them
                     cv2.circle(original, target, 5, 0, 1)
-                    cv2.circle(original, centroid, 4, 0, 5)
+                    cv2.circle(original, self.centroid, 4, 0, 5)
                     cv2.imshow('Result', original)
             if benchmarking:
                 self.debug = True
             return offset
 
 
-if __name__ == '__main__':
+def test_wellbottomfeaturesevaluator():
     # Test WellBottomFeaturesEvaluator with a test image
-    #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
-    #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
+    # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
+    # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
     imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
 
     # benchmark opencv vs c
     runtimes_c = []
     runtimes_opencv = []
 
-    x = WellBottomFeaturesEvaluator(False)
+    x = WellBottomFeaturesEvaluator((410, 308), False)
     for _ in range(10):
-
         start = timeit.default_timer()
         print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
         stop = timeit.default_timer()
         print(f'Time C ({_+1}): {stop-start}')
-        runtimes_c.append(stop-start)
+        runtimes_c.append(stop - start)
 
     x.debug = True
     for _ in range(10):
-
         start = timeit.default_timer()
         print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True))
         stop = timeit.default_timer()
         print(f'Time opencv ({_+1}): {stop-start}')
-        runtimes_opencv.append(stop-start)
+        runtimes_opencv.append(stop - start)
 
     print('avg time c: ', sum(runtimes_c) / len(runtimes_c))
     print('avg time opencv: ', sum(runtimes_opencv) / len(runtimes_opencv))
@@ -196,10 +294,26 @@ if __name__ == '__main__':
         c (no morph): 0.24s (->morphology takes ~0.96s), note: no blob found so no centroid/return value either
         c (no label/features/classify): 1.2s (->does not contribute significantly to runtime)
         c (no centroid finding): 1.2s (->does not contribute significantly to runtime)
-        
+
         conclusion: using opencv very much preferred, already super optimized in python.
                     could probably speed c algorithm up significantly to <0.2s at the very least, but is it worth the effort?
                     doubt 0.02 is attainable in the given timespan
     """
 
     cv2.waitKey(0)
+
+
+def test_houghtransformevaluator():
+    # for this image matlab version finds circle center @ 225, 149
+    # current params finds 226, 150
+    imgpath = "D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\0_11_downscaled.png"
+    x = HoughTransformEvaluator((410, 308), True)
+    print(f'offset: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144))}')
+    print(f'centroid: {x.centroid}')
+
+    cv2.waitKey(0)
+
+
+if __name__ == '__main__':
+    #test_wellbottomfeaturesevaluator()
+    test_houghtransformevaluator()
