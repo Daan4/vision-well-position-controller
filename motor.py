@@ -98,14 +98,14 @@ class Stepper(QObject):
                 sleep_time = 0  # Keep track of total time to sleep after sending the wave before stopping it
                 pulse_list = []
                 for i in range(1, N):  # ramp up during first N pulses
-                    pulse_list.append(pigpio.pulse(self.STP_pin, 0, int(N*3/(4*f*i)*1000000)))
-                    pulse_list.append(pigpio.pulse(0, self.STP_pin, int(N*3/(4*f*i)*1000000)))
+                    pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(N*3/(4*f*i)*1000000)))
+                    pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(N*3/(4*f*i)*1000000)))
                     sleep_time += 2 * (N*3/(4*f*i))
                     if len(pulse_list) == num_steps:
                         break
                 while num_steps > len(pulse_list) / 2:
-                    pulse_list.append(pigpio.pulse(self.STP_pin, 0, int(1/(2*f)*1000000)))
-                    pulse_list.append(pigpio.pulse(0, self.STP_pin, int(1/(2*f)*1000000)))
+                    pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(1/(2*f)*1000000)))
+                    pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(1/(2*f)*1000000)))
                     sleep_time += 2 * 1/(2*f)
                     
                 # wait .1s longer just in case
