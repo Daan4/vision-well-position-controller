@@ -355,7 +355,7 @@ void multiply( const image_t *src, image_t *dst );
 // Postcondition: dst is a binary image
 void invert( const image_t *src, image_t *dst);
 
-void gamma( const image_t *src, image_t *dst, const float c, const float g);
+void gamma_evdk( const image_t *src, image_t *dst, const float c, const float g);
 
 
 // ----------------------------------------------------------------------------

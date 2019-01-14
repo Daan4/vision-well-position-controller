@@ -1,9 +1,7 @@
 import numpy as np
 import csv
 import os
-from camera import PiVideoStream
 from time import sleep
-from motor import Motor
 from well_position_evaluators import WellBottomFeaturesEvaluator
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 import cv2
@@ -24,13 +22,14 @@ class WellPositionController(QThread):
     name = "WellPositionController"
     data = None
 
-    def __init__(self, setpoints_csv, max_offset, *evaluators, target_coordinates=None):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, camera, *evaluators, target_coordinates=None):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
             camera: Camera object instance to capture images
             motor_x: Motor object instance that controls x axis position
             motor_y: Motor object instance that controls y axis position
+            camera: PiVideoStream object instance
             max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
@@ -41,6 +40,9 @@ class WellPositionController(QThread):
         self.evaluators = evaluators
         self.target = target_coordinates
         self.max_offset = max_offset
+        self.motor_x = motor_x
+        self.motor_y = motor_y
+        self.camera_started = False
         self.request_new_image = False  # Set to True to request a new image frame from PiVideoStream that will be stored in self.img
         self.img = None
 
@@ -100,6 +102,7 @@ class WellPositionController(QThread):
         Args:
             image: bgr image matrix (opencv compatible)
         """
+        self.camera_started = True
         try:
             if not self.request_new_image:
                 self.sig_msg.emit(self.name + ": no new image needed, frame dropped.")
@@ -108,6 +111,19 @@ class WellPositionController(QThread):
                 self.request_new_image = False
         except Exception as err:
             self.sig_msg.emit(self.name, ": exception in img_update " + str(err))
+            
+    def get_new_image(self):
+        if not self.camera_started:
+            # Return None if the camera is not yet started -> cannot obtain a new frame
+            return None
+        self.img = None
+        # Request new image frame from PiVideoStream
+        self.request_new_image = True
+        while self.img is None:
+            # Wait for new image frame
+            sleep(0.01)
+        return True  # Return True on success
+            
 
     def control_loop(self):
         """
@@ -143,11 +159,7 @@ class WellPositionController(QThread):
             while not passed:
                 # Use camera feedback to improve position until it passes
                 # Get new image frame
-                self.img = None
-                self.request_new_image = True
-                while self.img is None:
-                    # Wait for new image frame
-                    sleep(0.01)
+                self.get_new_image()
                 # convert to grayscale
                 self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
                 # evaluate image
@@ -166,10 +178,24 @@ class WellPositionController(QThread):
 
         # write new offsets to _offsets.csv file
         with open(offsets_csv_path, 'w') as f:
-            f.writelines([f"{x[0]}, {x[1]}" for x in new_offsets])
+            f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
+            
+    def test(self):
+        #while True:
+            # Display new image frame
+          #  if self.get_new_image():
+          #      cv2.imshow('image', self.img)
+          #  else:
+          #      print("Camera is paused")
+
+         #   self.motor_x.stop()
+         print("ccw")
+         self.motor_x.stop()
+         self.motor_x.go_once(5, clockwise=False)
 
     def run(self):
-        self.control_loop()
+        self.test()
+        #self.control_loop()
 
 
 if __name__ == '__main__':

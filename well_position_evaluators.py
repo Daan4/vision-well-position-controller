@@ -293,7 +293,7 @@ def test_wellbottomfeaturesevaluator():
             start = timeit.default_timer()
             print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
             stop = timeit.default_timer()
-            print(f'Time C ({_+1}): {stop-start}')
+            print('Time C ({}): {}'.format(_+1, stop-start))
             runtimes_c.append(stop - start)
 
         x.debug = True
@@ -301,7 +301,7 @@ def test_wellbottomfeaturesevaluator():
             start = timeit.default_timer()
             print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True))
             stop = timeit.default_timer()
-            print(f'Time opencv ({_+1}): {stop-start}')
+            print('Time opencv ({}): {}'.format(_+1, stop-start))
             runtimes_opencv.append(stop - start)
 
         print('avg time c: ', sum(runtimes_c) / len(runtimes_c))
@@ -328,9 +328,9 @@ def test_wellbottomfeaturesevaluator():
         # single run to compare c vs opencv result
         imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
         x = WellBottomFeaturesEvaluator((410, 308), True)
-        print(f'opencv: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True)}')
+        print('opencv: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True)))
         x.debug = False
-        print(f'c: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)}')
+        print('c: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)))
 
 
 def test_houghtransformevaluator():
@@ -338,8 +338,8 @@ def test_houghtransformevaluator():
     # current params finds 226, 150
     imgpath = "D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\0_11_downscaled.png"
     x = HoughTransformEvaluator((410, 308), True)
-    print(f'offset: {x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144))}')
-    print(f'centroid: {x.centroid}')
+    print('offset: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144))))
+    print('centroid: {}'.format(x.centroid))
 
     cv2.waitKey(0)
 

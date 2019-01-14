@@ -500,7 +500,7 @@ void invert( const image_t *src, image_t *dst)
     fp[src->type](src, dst);
 }
 
-void gamma( const image_t *src, image_t *dst, const float c, const float g) {
+void gamma_evdk( const image_t *src, image_t *dst, const float c, const float g) {
     switch(src->type) {
     case IMGTYPE_BASIC:
         gamma_basic(src, dst, c, g);

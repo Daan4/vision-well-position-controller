@@ -1,10 +1,14 @@
 // desktop includes
-#include "D:/Program Files/Python36/include/Python.h"
-#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
+//#include "D:/Program Files/Python36/include/Python.h"
+//#include "D:/Libraries/Documents/Google Drive/ELT/semester 7 minor/EVD1/svn blok 2/evd1/evdk2/EVDK2 v1.0 PC (Qt)/evdk2/operators/operators_basic.h"
 
 // laptop includes
 //#include "../venv/Include/Python.h"
 //#include "operators_basic.h"
+
+// raspberry pi includes
+#include "Python.h"
+#include "operators_basic.h"
 
 // Manually define M_PI
 #define M_PI		3.14159265358979323846
@@ -87,7 +91,7 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     contrastStretchFast(src, src);
 
     // 3. Gamma
-    gamma(src, src, c, g);
+    gamma_evdk(src, src, c, g);
 
     // 4. Otsu threshold
     thresholdOtsu(src, src, BRIGHT);
