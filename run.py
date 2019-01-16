@@ -27,7 +27,7 @@ FRAME_RATE = 30
 USE_VIDEO_PORT = True
 
 ## define evaluator settings
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 motor_x = None
 motor_y = None
@@ -65,7 +65,8 @@ if __name__ == '__main__':
                                  motor_y,
                                  vs,
                                  e, 
-                                 target_coordinates=target_coordinates)
+                                 target_coordinates=target_coordinates,
+                                 debug=DEBUG_MODE)
                                  
     # connect pivideostream frame emitter to update function in wpc
     vs.ready.connect(wpc.img_update)
@@ -76,5 +77,3 @@ if __name__ == '__main__':
     print("starting event loop")
     signal.signal(signal.SIGINT, catch_sigint)
     app.exec_()
-    
-

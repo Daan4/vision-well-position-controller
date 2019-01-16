@@ -6,7 +6,7 @@ from well_position_evaluators import WellBottomFeaturesEvaluator
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 import cv2
 import threading
-
+from random import randint
 
 class WellPositionController(QThread):
     """
@@ -22,8 +22,9 @@ class WellPositionController(QThread):
     ready = pyqtSignal()
     name = "WellPositionController"
     data = None
+    DEBUG_MODE_MAX_ERROR_MM = 5  # Max random error introduced in debug mode
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, *evaluators, target_coordinates=None):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, *evaluators, target_coordinates=None, debug=False):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -33,6 +34,8 @@ class WellPositionController(QThread):
             max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
+            debug: If set to True a random error will be added to each setpoint. Max error in each direction given by DEBUG_MODE_MAX_ERROR
+                   The control loop will also require user input every iteration so that image processing results may be inspected
         """
         super().__init__()
         self.setpoints_csv_filename = setpoints_csv
@@ -45,6 +48,7 @@ class WellPositionController(QThread):
         self.camera_started = False
         self.request_new_image = False  # Used by get_new_image and img_update to update self.img with a new frame from the pivideostream class
         self.img = None
+        self.debug = debug
 
     def __del__(self):
         self.wait()
@@ -173,12 +177,20 @@ class WellPositionController(QThread):
             modified_setpoints = self.setpoints
 
         new_offsets = []
+        # Todo: this assumes the well plate position starts @ 0,0 : ie a corner of the well plate is in frame
+        # Todo: the initial previous setpoint probably needs to be set to some known initial offset
+        # Todo: the motors should also start from a known position (probably against the limit switches)
         previous_setpoint_x = 0
         previous_setpoint_y = 0
         for i, setpoint in enumerate(modified_setpoints):
             setpoint_x, setpoint_y = setpoint
             # feed forward to the setpoint coordinates
-            self.move_motors(setpoint_x - previous_setpoint_x, setpoint_y - previous_setpoint_y)
+            if not self.debug:
+                self.move_motors(setpoint_x - previous_setpoint_x, setpoint_y - previous_setpoint_y)
+            else:
+                # In debug mode add a random error
+                self.move_motors(setpoint_x - previous_setpoint_x + randint(-self.DEBUG_MODE_MAX_ERROR_MM, self.DEBUG_MODE_MAX_ERROR_MM),
+                                 setpoint_y - previous_setpoint_y + randint(-self.DEBUG_MODE_MAX_ERROR_MM, self.DEBUG_MODE_MAX_ERROR_MM))
 
             total_error = [0, 0]  # Keep track of the total error so that we can save the new offset for the next run
             passed = False
@@ -190,6 +202,10 @@ class WellPositionController(QThread):
                 self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
                 # evaluate image
                 result = self.evaluate_position(self.img)
+                if self.debug:
+                    # Require user input in debug mode, so that results can be inspected
+                    print("WPC DEBUG MODE: evaluation result = {}".format(result))
+                    input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
                     # continue with the next well
@@ -202,29 +218,36 @@ class WellPositionController(QThread):
                     # basically feedforward by result[0] in x and result[1] in y directions
                     self.move_motors(result[0], result[1])
 
+            # Track previous setpoints to determine motor direction
             previous_setpoint_x = setpoint_x
             previous_setpoint_y = setpoint_y
 
-        # write new offsets to _offsets.csv file
-        with open(offsets_csv_path, 'w') as f:
-            f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
+        # write new offsets to _offsets.csv file (unless in debug mode)
+        if not self.debug:
+            with open(offsets_csv_path, 'w') as f:
+                f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
             
     def test(self):
-        #while True:
-            # Display new image frame
-          #  if self.get_new_image():
-          #      cv2.imshow('image', self.img)
-          #  else:
-          #      print("Camera is paused")
-
-         #   self.motor_x.stop()
-         print("ccw")
-         self.motor_x.stop()
-         self.motor_x.go_once(5, clockwise=False)
+       #while True:
+           # Display new image frame
+         #  if self.get_new_image():
+         #      cv2.imshow('image', self.img)
+         #  else:
+         #      print("Camera is paused")
+        #   self.motor_x.stop()
+        self.motor_x.go_once(500, clockwise=False)
+        sleep(1)
+        self.motor_x.go_once(500, clockwise=True)
+        sleep(1)
+        self.motor_y.go_once(500, clockwise=False)
+        sleep(1)
+        self.motor_y.go_once(500, clockwise=True)
+        sleep(1)
 
     def run(self):
-        self.test()
-        #self.control_loop()
+        #
+        #self.test()
+        self.control_loop()
 
 
 if __name__ == '__main__':
