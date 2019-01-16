@@ -36,7 +36,7 @@ class Stepper(QObject):
     MS_pins = (None, None, None)
     running = False
 
-    def __init__(self, pio, NEN_pin=14, DIR_pin=15, STP_pin=18, LIM_pin=0, MS_pins=(1,2,3)):
+    def __init__(self, pio, mm_per_step, NEN_pin=14, DIR_pin=15, STP_pin=18, LIM_pin=0, MS_pins=(1,2,3)):
         super().__init__()
         if not isinstance(pio, pigpio.pi):
             raise TypeError("Constructor attribute is not a pigpio.pi instance!")
@@ -47,6 +47,7 @@ class Stepper(QObject):
         self.STP_pin = STP_pin
         self.LIM_pin = LIM_pin
         self.MS_pins = MS_pins
+        self.mm_per_step = mm_per_step
         self.pio = pio
         self.pio.set_mode(self.NEN_pin, pigpio.OUTPUT)
         self.pio.write(self.NEN_pin, True) # inverse logic
@@ -80,11 +81,15 @@ class Stepper(QObject):
             raise ValueError(self.__class__.__name__ + ": ValueError")
             
     @pyqtSlot(float)
-    def go_once(self, num_steps, clockwise=False, steptype="Full"):
+    def go_once(self, steps=None, mm=None, clockwise=False, steptype="Full"):
         # Similar to self.go, except self.go_once creates a pulse wave with num_steps pulses
         # and the pulse wave is sent to the motor only once.
         # this function blocks until the full pulse wave has been consumed
-        #try:
+        if steps is None and mm is None or steps is not None and mm is not None:
+            raise ValueError("Either the steps or mm parameter needs to be supplied, but not both.")
+        if mm is not None:
+            steps = int(mm / self.mm_per_step + 0.5)  # 15 mm per step, moving 50 mm
+        try:
             if self.pio is not None and not self.running:
                 self.sigMsg.emit("{}: go_once {} steps on pins ({}, {}, {})".format(self.__class__.__name__, num_steps, str(self.NEN_pin), str(self.DIR_pin), str(self.STP_pin)))
                 self.running = True
@@ -101,9 +106,9 @@ class Stepper(QObject):
                     pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(N*3/(4*f*i)*1000000)))
                     pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(N*3/(4*f*i)*1000000)))
                     sleep_time += 2 * (N*3/(4*f*i))
-                    if len(pulse_list) == num_steps:
+                    if len(pulse_list) == steps:
                         break
-                while num_steps > len(pulse_list) / 2:
+                while steps > len(pulse_list) / 2:
                     pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(1/(2*f)*1000000)))
                     pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(1/(2*f)*1000000)))
                     sleep_time += 2 * 1/(2*f)
@@ -122,10 +127,10 @@ class Stepper(QObject):
                 
                 #sleep(sleep_time)
                 #self.stop()
-        #except Exception as err:
-            #raise ValueError(self.__class__.__name__ + ": ValueError")
+        except Exception as err:
+            raise ValueError(self.__class__.__name__ + ": ValueError")
                              
-    def cbf(gpio, level, tick):
+    def cbf(self, gpio, level, tick):
        print(gpio, level, tick)
        self.stop()
        self.sigMsg.emit(self.__name__ + ": home!")

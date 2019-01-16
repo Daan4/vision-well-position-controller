@@ -18,6 +18,9 @@ Y_STP_pin = 24
 Y_DIR_pin = 25
 Y_LIM_pin = 0
 
+## mm per step
+MM_PER_STEP = 0.01  # todo determine this
+
 ## define camera settings
 RESOLUTION = (640, 480)  # width, height
 FRAME_RATE = 30
@@ -47,8 +50,8 @@ if __name__ == '__main__':
     
     # Set up Stepper motor driver
     pio = pigpio.pi()
-    motor_x = Stepper(pio, NEN_pin=X_NEN_pin, DIR_pin=X_DIR_pin, STP_pin=X_STP_pin)
-    motor_y = Stepper(pio, NEN_pin=Y_NEN_pin, DIR_pin=Y_DIR_pin, STP_pin=Y_STP_pin)
+    motor_x = Stepper(pio, MM_PER_STEP, NEN_pin=X_NEN_pin, DIR_pin=X_DIR_pin, STP_pin=X_STP_pin)
+    motor_y = Stepper(pio, MM_PER_STEP, NEN_pin=Y_NEN_pin, DIR_pin=Y_DIR_pin, STP_pin=Y_STP_pin)
     
 
     # Set up well position controller and evaluators
