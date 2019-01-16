@@ -5,6 +5,7 @@ from time import sleep
 from well_position_evaluators import WellBottomFeaturesEvaluator
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 import cv2
+import threading
 
 
 class WellPositionController(QThread):
@@ -123,7 +124,30 @@ class WellPositionController(QThread):
             # Wait for new image frame
             sleep(0.01)
         return True  # Return True on success
-            
+
+    def move_motors(self, delta_x_mm, delta_y_mm):
+        """Move the well plate in two dimensions simultaneously.
+
+        Args:
+            delta_x_mm: delta x given in mm, negative number moves counterclockwise
+            delta_y_mm: delta y given in mm, negative number moves counterclockwise
+        """
+        # Determine motor direction
+        if delta_x_mm > 0:
+            clockwise_x = True
+        else:
+            clockwise_x = False
+        if delta_y_mm > 0:
+            clockwise_y = True
+        else:
+            clockwise_y = False
+        # Since the go_once function blocks until the target is reached, start them threaded and wait for the threads to finish.
+        t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'mm': abs(delta_x_mm), 'clockwise': clockwise_x})
+        t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'mm': abs(delta_y_mm), 'clockwise': clockwise_y})
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
     def control_loop(self):
         """
@@ -150,9 +174,12 @@ class WellPositionController(QThread):
             modified_setpoints = self.setpoints
 
         new_offsets = []
+        previous_setpoint_x = 0
+        previous_setpoint_y = 0
         for i, setpoint in enumerate(modified_setpoints):
-
-            # todo: feedforward first to move to the next setpoint position and wait until position is reached
+            setpoint_x, setpoint_y = setpoint
+            # feed forward to the setpoint coordinates
+            self.move_motors(setpoint_x - previous_setpoint_x, setpoint_y - previous_setpoint_y)
 
             total_error = [0, 0]  # Keep track of the total error so that we can save the new offset for the next run
             passed = False
@@ -173,8 +200,11 @@ class WellPositionController(QThread):
                     new_offsets.append(tuple(np.add(total_error, setpoint_offsets[i])))
                 else:
                     total_error = list(np.add(total_error, result))
-                    # todo feedforward based on newton's method, where the new setpoint is based on the error
                     # basically feedforward by result[0] in x and result[1] in y directions
+                    self.move_motors(result[0], result[1])
+
+            previous_setpoint_x = setpoint_x
+            previous_setpoint_y = setpoint_y
 
         # write new offsets to _offsets.csv file
         with open(offsets_csv_path, 'w') as f:
