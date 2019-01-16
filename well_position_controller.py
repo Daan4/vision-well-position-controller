@@ -23,14 +23,13 @@ class WellPositionController(QThread):
     name = "WellPositionController"
     data = None
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, camera, *evaluators, target_coordinates=None):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, *evaluators, target_coordinates=None):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
             camera: Camera object instance to capture images
             motor_x: Motor object instance that controls x axis position
             motor_y: Motor object instance that controls y axis position
-            camera: PiVideoStream object instance
             max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
@@ -44,7 +43,7 @@ class WellPositionController(QThread):
         self.motor_x = motor_x
         self.motor_y = motor_y
         self.camera_started = False
-        self.request_new_image = False  # Set to True to request a new image frame from PiVideoStream that will be stored in self.img
+        self.request_new_image = False  # Used by get_new_image and img_update to update self.img with a new frame from the pivideostream class
         self.img = None
 
     def __del__(self):
@@ -61,13 +60,13 @@ class WellPositionController(QThread):
         Find the diaphragm center by analyzing an image without a well plate present.
         Sets self.target to the newly calculated diaphragm center.
         """
-        # capture image
-        img = self.camera.capture_raw_image()
+        # get new image
+        self.get_new_image()
         # make a list of centroids and their weights
         centroids = []
         weights = []
         for evaluator, weight in self.evaluators:
-            evaluator.evaluate(img)
+            evaluator.evaluate(self.img)
             centroid = evaluator.centroid
             if centroid is not None:
                 centroids.append(evaluator.centroid)
