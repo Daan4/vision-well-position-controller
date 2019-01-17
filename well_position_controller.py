@@ -311,34 +311,8 @@ class WellPositionController(QThread):
         self.move_motors(500, 0)
         self.get_new_image()
         cv2.imshow('image', self.img)
-        
-        
-        
-        # doing 3k pulses times out connection -> in motor.go_once generate pulse lists in blocks of 2500??
-           
-           
-        #while True:
-            #t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'steps': 1000, 'clockwise': False})
-            #t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'steps': 1000, 'clockwise': False})
-            #t1.start()
-            #t2.start()
-            #t1.join()
-            #t2.join()
-            
-            #t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'steps': 1000, 'clockwise': False})
-            #t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'steps': 1000, 'clockwise': False})
-            #t1.start()
-            #t2.start()
-            #t1.join()
-            #t2.join()
-        
 
     def run(self):
-        #while not self.get_new_image():
-        #    sleep(0.5)
-        #self.get_new_image()
-        #cv2.imshow('image', self.img)
-        #cv2.imwrite('images/mm_per_pixel_test.png', self.img)
         #self.test()
         #self.calibrate_mm_per_step_photos()
         self.calibrate()
