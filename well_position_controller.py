@@ -2,11 +2,12 @@ import numpy as np
 import csv
 import os
 from time import sleep
+from datetime import datetime
 from well_position_evaluators import WellBottomFeaturesEvaluator
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
 import cv2
-import threading
 from random import randint
+
 
 class WellPositionController(QThread):
     """
@@ -24,7 +25,7 @@ class WellPositionController(QThread):
     data = None
     DEBUG_MODE_MAX_ERROR_MM = 5  # Max random error introduced in debug mode
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, pio, *evaluators, target_coordinates=None, debug=False):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, pio, *evaluators, target_coordinates=None, debug=False, logging=False):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -33,11 +34,12 @@ class WellPositionController(QThread):
             motor_y: Motor object instance that controls y axis position
             mm_per_pixel: mm per pixel used to convert evaluator results (which are given in pixels)
             pio: pigpio class
-            max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
+            max_offset: (x, y) tuple of maximum allowed error in mm. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
             debug: If set to True a random error will be added to each setpoint. Max error in each direction given by DEBUG_MODE_MAX_ERROR
                    The control loop will also require user input every iteration so that image processing results may be inspected
+            logging: Set to True to log data to csv file
         """
         super().__init__()
         self.setpoints_csv_filename = setpoints_csv
@@ -53,6 +55,24 @@ class WellPositionController(QThread):
         self.request_new_image = False  # Used by get_new_image and img_update to update self.img with a new frame from the pivideostream class
         self.img = None
         self.debug = debug
+        self.logging = logging
+        if self.logging:
+            # Create logging csv and add header text
+            if not os.path.isdir('/logs'):
+                os.mkdir('/logs')
+            self.logfile = 'logs/{}_WellPositionControllerLog.csv'.format(datetime.now().strftime('%Y%m%d%H%M%S'))
+            with open(self.logfile, 'w') as f:
+                csv_writer = csv.writer(f, delimiter=',')
+                csv_headers = ['Timestamp', 'Target (pixel coordinates (x, y))', 'Setpoint (mm)', '']
+                for evaluator, weight in evaluators:
+                    csv_headers.append('{} (weight {}) offset x (pixels)'.format(evaluator.__class__.__name__, weight))
+                    csv_headers.append('{} (weight {}) offset y (pixels)'.format(evaluator.__class__.__name__, weight))
+                    csv_headers.append('{} (weight {}) offset x (mm)'.format(evaluator.__class__.__name__, weight))
+                    csv_headers.append('{} (weight {}) offset y (mm)'.format(evaluator.__class__.__name__, weight))
+                csv_headers.append('Total weighted offset (pixels)')
+                csv_headers.append('Total weighted offset (mm)')
+                csv_headers.append('Pass 1/Fail 0 (max offset in mm (x, y): {})'.format(self.max_offset))
+                csv_writer.writerow(csv_headers)
 
     def __del__(self):
         self.wait()
@@ -61,7 +81,7 @@ class WellPositionController(QThread):
         self.setpoints_csv_filename = filename
         with open(filename) as f:
             reader = csv.reader(f)
-            return [(int(row[0]), int(row[1])) for row in reader]
+            return [(int(float(row[0])), int(float(row[1]))) for row in reader]
 
     def calibrate(self):
         """
@@ -83,9 +103,14 @@ class WellPositionController(QThread):
         # calculate the average centroid
         self.target = tuple(np.average(centroids, 0, weights))
 
-    def evaluate_position(self, img):
+    def evaluate_position(self, img, setpoint):
         """
         Evaluates position based on all evaluator classes and their output weights.
+
+        Args:
+            img: 2d grayscale matrix
+            setpoint: current setpoint (for logging purposes only)
+
         Returns:
              an (x,y) offset vector if the image is not correct or True if the image is correct
         """
@@ -98,10 +123,37 @@ class WellPositionController(QThread):
                 weights.append(weight)
         # calculate the average offset
         offset = np.average(offsets, 0, weights)
-        if abs(offset[0]) < self.max_offset[0] and abs(offset[1]) < self.max_offset[1]:
-            return True
+        # convert offset to mm
+        offset_mm = np.multiply(offset, self.mm_per_pixel)
+        if abs(offset_mm[0]) < self.max_offset_mm[0] and abs(offset_mm[1]) < self.max_offset_mm[1]:
+            result = True
         else:
-            return offset
+            result = offset_mm
+
+        if self.logging:
+            # Log data to csv
+            with open(self.logfile, 'a+') as f:
+                csv_writer = csv.writer(f, delimiter=',')
+                csv_data = []
+                csv_data.append(datetime.now().strftime('%Y%m%d%H%M%S'))  # Timestamp
+                csv_data.append(self.target)  # Target (pixel coordinates)
+                csv_data.append(setpoint)  # Setpoint (mm)
+                for i, evaluator in enumerate(self.evaluators):
+                    evaluator = evaluator(0)  # Evaluator is a tuple, we don't need the weights here
+                    # Write offset x and offset y in pixels and mm for each evaluator
+                    csv_data.append(offsets[i][0])
+                    csv_data.append(offsets[i][1])
+                    csv_data.append(offsets[i][0] * self.mm_per_pixel)
+                    csv_data.append(offsets[i][1] * self.mm_per_pixel)
+                csv_data.append(offset)  # Total weighted offset in pixels
+                csv_data.append(offset_mm)  # Total weighted offset in mm
+                if result is True:
+                    csv_data.append(1)  # 1 = Pass, 0 = Fail
+                else:
+                    csv_data.append(0)
+                csv_writer.writerow(csv_data)
+
+        return result
 
     @pyqtSlot(np.ndarray)
     def img_update(self, image=None):
@@ -168,7 +220,7 @@ class WellPositionController(QThread):
         try:
             with open(offsets_csv_path, 'r') as f:
                 reader = csv.reader(f)
-                setpoint_offsets = [(int(row[0]), int(row[1])) for row in reader]
+                setpoint_offsets = [(int(float(row[0])), int(float(row[1]))) for row in reader]
             modified_setpoints = np.add(self.setpoints, setpoint_offsets)
         except FileNotFoundError as ex:
             # initialise setpoints offsets csv file with all zeroes
@@ -202,7 +254,7 @@ class WellPositionController(QThread):
                 # Get new image frame
                 self.get_new_image()
                 # evaluate image
-                result = self.evaluate_position(self.img)
+                result = self.evaluate_position(self.img, setpoint)
                 if self.debug:
                     # Require user input in debug mode, so that results can be inspected
                     print("WPC DEBUG MODE: evaluation result = {}".format(result))

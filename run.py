@@ -7,7 +7,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 import signal
 
-## define motor driver pins
+# define motor driver pins
 X_NEN_pin = 14
 X_STP_pin = 15
 X_DIR_pin = 18
@@ -18,7 +18,7 @@ Y_STP_pin = 24
 Y_DIR_pin = 25
 Y_LIM_pin = 0
 
-## mm per step
+# mm per step
 MM_PER_STEP = 0.005  # appears to be the same for x and y
 
 # used x_1, x_2, y_1, y_2 images to determine above variables
@@ -28,18 +28,23 @@ MM_PER_STEP = 0.005  # appears to be the same for x and y
 # mm_x = 12.5
 # mm_y = 10.6
 
-## mm per pixel
-MM_PER_PIXEL = 0.00254 # (depends on height?, this is for settings on 17/1/19)
+
+# mm per pixel
+MM_PER_PIXEL = 0.00254  # (depends on height?, this is for settings on 17/1/19), used image mm_per_pixel_test
 
 
-## define camera settings
+# define camera settings
 RESOLUTION = (640, 480)  # width, height
 FRAME_RATE = 30
 USE_VIDEO_PORT = False
 
 
-## define evaluator settings
-DEBUG_MODE = True
+# enable debug mode for controller and evaluators
+ENABLE_DEBUG_MODE = True
+
+# enable logging data to csv file
+ENABLE_LOGGING = True
+
 
 motor_x = None
 motor_y = None
@@ -66,22 +71,23 @@ if __name__ == '__main__':
     pio = pigpio.pi()
     motor_x = Stepper(pio, MM_PER_STEP, NEN_pin=X_NEN_pin, DIR_pin=X_DIR_pin, STP_pin=X_STP_pin)
     motor_y = Stepper(pio, MM_PER_STEP, NEN_pin=Y_NEN_pin, DIR_pin=Y_DIR_pin, STP_pin=Y_STP_pin)
-    
 
     # Set up well position controller and evaluators
     setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
-    e = (WellBottomFeaturesEvaluator(RESOLUTION, DEBUG_MODE), 1)
-         #(HoughTransformEvaluator(RESOLUTION, DEBUG_MODE), 1))
-    wpc = WellPositionController(setpoints_csv_file, 
-                                 (16, 16), 
-                                 motor_x, 
+    e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
+    e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
+    wpc = WellPositionController(setpoints_csv_file,
+                                 (16, 16),
+                                 motor_x,
                                  motor_y,
                                  MM_PER_PIXEL,
                                  pio,
-                                 e, 
+                                 e1,
+                                 # e2,
                                  target_coordinates=target_coordinates,
-                                 debug=DEBUG_MODE)
+                                 debug=ENABLE_DEBUG_MODE,
+                                 logging=ENABLE_LOGGING)
                                  
     # connect pivideostream frame emitter to update function in wpc
     vs.ready.connect(wpc.img_update)
