@@ -57,6 +57,7 @@ class Stepper(QObject):
 ##            self.pio.set_mode(i, pigpio.OUTPUT)
         self.pio.set_mode(self.STP_pin, pigpio.OUTPUT)
         self.pio.write(self.STP_pin, False)
+        self.cbc = self.pio.callback(self.STP_pin)  # to create a simple "callback counter" on the pin where the PWM pulses are sent
         
     @pyqtSlot(float)
     def go(self, clockwise=False, steptype="Full"):
@@ -85,50 +86,38 @@ class Stepper(QObject):
         # Similar to self.go, except self.go_once creates a pulse wave with num_steps pulses
         # and the pulse wave is sent to the motor only once.
         # this function blocks until the full pulse wave has been consumed
+        
         if steps is None and mm is None or steps is not None and mm is not None:
             raise ValueError("Either the steps or mm parameter needs to be supplied, but not both.")
         if mm is not None:
             steps = int(mm / self.mm_per_step + 0.5)  # 15 mm per step, moving 50 mm
-        try:
-            if self.pio is not None and not self.running:
-                self.sigMsg.emit("{}: go_once {} steps on pins ({}, {}, {})".format(self.__class__.__name__, num_steps, str(self.NEN_pin), str(self.DIR_pin), str(self.STP_pin)))
-                self.running = True
-                self.setResolution(steptype)
-                self.pio.write(self.NEN_pin, False) # inverse logic
-                self.pio.write(self.DIR_pin, clockwise) # set direction
-                # Create a wave with num_steps pulses, where the first N pulses are ramped up to f Hz
-                N = 20
-                f = 1000
-                self.pio.wave_clear()
-                sleep_time = 0  # Keep track of total time to sleep after sending the wave before stopping it
-                pulse_list = []
-                for i in range(1, N):  # ramp up during first N pulses
-                    pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(N*3/(4*f*i)*1000000)))
-                    pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(N*3/(4*f*i)*1000000)))
-                    sleep_time += 2 * (N*3/(4*f*i))
-                    if len(pulse_list) == steps:
-                        break
-                while steps > len(pulse_list) / 2:
-                    pulse_list.append(pigpio.pulse(1<<self.STP_pin, 0, int(1/(2*f)*1000000)))
-                    pulse_list.append(pigpio.pulse(0, 1<<self.STP_pin, int(1/(2*f)*1000000)))
-                    sleep_time += 2 * 1/(2*f)
-                    
-                # wait .1s longer just in case
-                sleep_time += 0.1
+        
+        if self.pio is not None and not self.running:
+            self.sigMsg.emit(self.__class__.__name__ + ": go on pins (" + str(self.NEN_pin)+","+ str(self.DIR_pin)+","+str(self.STP_pin)+")")
+            self.running = True
+            self.setResolution(steptype)
+            self.pio.write(self.NEN_pin, False) # inverse logic
+            self.pio.write(self.DIR_pin, clockwise) # DIR pin is sampled on rising STEP edge, so it is set first
+            self.cbc.reset_tally()
+            self.generate_ramp([
+                                [7,  0],
+                                [20, 0],
+                                [57, 1],
+                                [154,1],
+                                [354,1],
+                                [622,1],
+                                [832,1],
+                                [937,1],
+                                [978,1],
+                                [993,1]
+                                ]) # sigmoid ramp up
+            self.pio.set_PWM_frequency(self.STP_pin, 1000)
+            self.pio.set_PWM_dutycycle(self.STP_pin, 128) # PWM 3/4 on
+            
+            while self.cbc.tally() < steps - 10:
+                time.sleep(0.001)
                 
-                self.pio.wave_add_generic(pulse_list)
-                wave = self.pio.wave_create()
-                
-                # Send wave
-                self.pio.wave_send_once(wave)
-                
-                # Wait until wave has ended, then stop the motor
-                threading.Timer(sleep_time, self.stop).start()
-                
-                #sleep(sleep_time)
-                #self.stop()
-        except Exception as err:
-            raise ValueError(self.__class__.__name__ + ": ValueError")
+            self.stop()
                              
     def cbf(self, gpio, level, tick):
        print(gpio, level, tick)
@@ -146,11 +135,23 @@ class Stepper(QObject):
     def stop(self):
         if self.running:
             self.sigMsg.emit(self.__class__.__name__ + ": stop on pins (" + str(self.NEN_pin)+","+ str(self.DIR_pin)+","+str(self.STP_pin)+")")
-            self.running = False            
             try:
                 if not(self.pio is None):
+                    self.pio.set_PWM_frequency(self.STP_pin,0)
+                    self.generate_ramp([[993,1],
+                                        [979,1],
+                                        [937,1],
+                                        [832,1],
+                                        [622,1],
+                                        [354,1],
+                                        [154,1],
+                                        [57, 1],
+                                        [20, 0],
+                                        [7,  0]
+                                        ]) # sigmoid rampdown
                     self.pio.write(self.NEN_pin, True) # inverse logic
-                    self.pio.set_PWM_frequency(self.STP_pin,0)                
+                    self.running = False            
+                    self.sigMsg.emit(self.__class__.__name__ + ": Current number of steps is " + str(self.cbc.tally())) # to display number of pulses made                    
             except Exception as err:
                 self.sigMsg.emit(self.__class__.__name__ + ": Error")
 
@@ -173,3 +174,37 @@ class Stepper(QObject):
         else: 
             raise ValueError("Error invalid motor_type: {}".format(steptype))
 ##        self.pio.write(self.MS_pins, resolution[steptype])
+
+    def generate_ramp(self, ramp):
+            """Generate ramp wave forms.
+            ramp:  List of [Frequency, Steps]
+            """
+            self.pio.wave_clear()     # clear existing waves
+            length = len(ramp)  # number of ramp levels
+            wid = [-1] * length
+
+            # Generate a wave per ramp level
+            for i in range(length):
+                frequency = ramp[i][0]
+                micros = int(500000 / frequency)
+                wf = []
+                wf.append(pigpio.pulse(1 << self.STP_pin, 0, micros))  # pulse on
+                wf.append(pigpio.pulse(0, 1 << self.STP_pin, micros))  # pulse off
+                self.pio.wave_add_generic(wf)
+                wid[i] = self.pio.wave_create()
+
+            # Generate a chain of waves
+            chain = []
+            for i in range(length):
+                steps = ramp[i][1]
+                x = steps & 255
+                y = steps >> 8
+                chain += [255, 0, wid[i], 255, 1, x, y]
+
+            self.pio.wave_chain(chain)  # Transmit chain.
+            # Is this required?
+            while self.pio.wave_tx_busy(): # While transmitting.
+                time.sleep(0.1)
+            # delete all waves
+            for i in range(length):
+                self.pio.wave_delete(wid[i])
