@@ -24,7 +24,7 @@ class WellPositionController(QThread):
     data = None
     DEBUG_MODE_MAX_ERROR_MM = 5  # Max random error introduced in debug mode
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, *evaluators, target_coordinates=None, debug=False):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, pio, *evaluators, target_coordinates=None, debug=False):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -32,6 +32,7 @@ class WellPositionController(QThread):
             motor_x: Motor object instance that controls x axis position
             motor_y: Motor object instance that controls y axis position
             mm_per_pixel: mm per pixel used to convert evaluator results (which are given in pixels)
+            pio: pigpio class
             max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
@@ -42,6 +43,7 @@ class WellPositionController(QThread):
         self.setpoints_csv_filename = setpoints_csv
         self.setpoints = self.load_setpoints_from_csv(setpoints_csv)
         self.evaluators = evaluators
+        self.pio = pio
         self.target = target_coordinates
         self.max_offset = max_offset
         self.motor_x = motor_x
@@ -59,7 +61,7 @@ class WellPositionController(QThread):
         self.setpoints_csv_filename = filename
         with open(filename) as f:
             reader = csv.reader(f)
-            return [tuple(row) for row in reader]
+            return [(int(row[0]), int(row[1])) for row in reader]
 
     def calibrate(self):
         """
@@ -67,7 +69,8 @@ class WellPositionController(QThread):
         Sets self.target to the newly calculated diaphragm center.
         """
         # get new image
-        self.get_new_image()
+        while not self.get_new_image():
+            sleep(0.1)
         # make a list of centroids and their weights
         centroids = []
         weights = []
@@ -114,6 +117,8 @@ class WellPositionController(QThread):
                 self.sig_msg.emit(self.name + ": no new image needed, frame dropped.")
             elif not (image is None):
                 self.img = image.copy()
+                # convert to grayscale
+                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
                 self.request_new_image = False
         except Exception as err:
             self.sig_msg.emit(self.name, ": exception in img_update " + str(err))
@@ -146,13 +151,9 @@ class WellPositionController(QThread):
             clockwise_y = True
         else:
             clockwise_y = False
-        # Since the go_once function blocks until the target is reached, start them threaded and wait for the threads to finish.
-        t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'mm': abs(delta_x_mm), 'clockwise': clockwise_x})
-        t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'mm': abs(delta_y_mm), 'clockwise': clockwise_y})
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        # Move motors 1 by 1
+        self.motor_x.go_once(mm=abs(delta_x_mm), clockwise=clockwise_x)
+        self.motor_y.go_once(mm=abs(delta_y_mm), clockwise=clockwise_y)
 
     def control_loop(self):
         """
@@ -167,7 +168,7 @@ class WellPositionController(QThread):
         try:
             with open(offsets_csv_path, 'r') as f:
                 reader = csv.reader(f)
-                setpoint_offsets = [tuple(row) for row in reader]
+                setpoint_offsets = [(int(row[0]), int(row[1])) for row in reader]
             modified_setpoints = np.add(self.setpoints, setpoint_offsets)
         except FileNotFoundError as ex:
             # initialise setpoints offsets csv file with all zeroes
@@ -200,8 +201,6 @@ class WellPositionController(QThread):
                 # Use camera feedback to improve position until it passes
                 # Get new image frame
                 self.get_new_image()
-                # convert to grayscale
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
                 # evaluate image
                 result = self.evaluate_position(self.img)
                 if self.debug:
@@ -228,27 +227,69 @@ class WellPositionController(QThread):
         if not self.debug:
             with open(offsets_csv_path, 'w') as f:
                 f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
+                
+    def calibrate_mm_per_step_photos(self):
+        #x
+        while not self.get_new_image():
+            sleep(0.5)
+        self.get_new_image()
+        cv2.imshow('image', self.img)
+        cv2.imwrite('images/x_1.png', self.img)
+        self.move_motors(-2500, 0)
+        self.get_new_image()
+        cv2.imshow('image', self.img)
+        cv2.imwrite('images/x_2.png', self.img)
+        self.move_motors(2500, 0)
+        
+        #y
+        #while not self.get_new_image():
+            #sleep(0.5)
+        #self.get_new_image()
+        #cv2.imshow('image', self.img)
+        #cv2.imwrite('images/y_1.png', self.img)
+        #self.move_motors(0, -2200)
+        #self.get_new_image()
+        #cv2.imshow('image', self.img)
+        #cv2.imwrite('images/y_2.png', self.img)
+        #self.move_motors(0, 2200)
             
     def test(self):
-       #while True:
-           # Display new image frame
-         #  if self.get_new_image():
-         #      cv2.imshow('image', self.img)
-         #  else:
-         #      print("Camera is paused")
-        #   self.motor_x.stop()
-        self.motor_x.go_once(500, clockwise=False)
-        sleep(1)
-        self.motor_x.go_once(500, clockwise=True)
-        sleep(1)
-        self.motor_y.go_once(500, clockwise=False)
-        sleep(1)
-        self.motor_y.go_once(500, clockwise=True)
-        sleep(1)
+        self.move_motors(500, 0)
+        self.get_new_image()
+        cv2.imshow('image', self.img)
+        
+        
+        
+        # doing 3k pulses times out connection -> in motor.go_once generate pulse lists in blocks of 2500??
+           
+           
+        #while True:
+            #t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'steps': 1000, 'clockwise': False})
+            #t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'steps': 1000, 'clockwise': False})
+            #t1.start()
+            #t2.start()
+            #t1.join()
+            #t2.join()
+            
+            #t1 = threading.Thread(target=self.motor_x.go_once, kwargs={'steps': 1000, 'clockwise': False})
+            #t2 = threading.Thread(target=self.motor_y.go_once, kwargs={'steps': 1000, 'clockwise': False})
+            #t1.start()
+            #t2.start()
+            #t1.join()
+            #t2.join()
+        
 
     def run(self):
-        #
+        #while not self.get_new_image():
+        #    sleep(0.5)
+        #self.get_new_image()
+        #cv2.imshow('image', self.img)
+        #cv2.imwrite('images/mm_per_pixel_test.png', self.img)
         #self.test()
+        #self.calibrate_mm_per_step_photos()
+        self.calibrate()
+        print("calibrated target: {}".format(self.target))
+        input("Press enter to continue")
         self.control_loop()
 
 
