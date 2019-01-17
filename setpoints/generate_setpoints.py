@@ -31,4 +31,6 @@ def generate_setpoints(filename, initial_offset_y, initial_offset_x, offset_x, o
 
 if __name__ == '__main__':
     # settings for 24 well plate
-    generate_setpoints("setpoints\\24.csv", 13.49, 15.13, 19.5, 19.5, 4, 6)
+    #generate_setpoints("setpoints\\24.csv", 13.49, 15.13, 19.5, 19.5, 4, 6)
+    # settings for 24 well plate, assuming that we start on well A1
+    generate_setpoints("24.csv", 0, 0, 19.5, 19.5, 4, 6)
