@@ -24,13 +24,14 @@ class WellPositionController(QThread):
     data = None
     DEBUG_MODE_MAX_ERROR_MM = 5  # Max random error introduced in debug mode
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, *evaluators, target_coordinates=None, debug=False):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, *evaluators, target_coordinates=None, debug=False):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
             camera: Camera object instance to capture images
             motor_x: Motor object instance that controls x axis position
             motor_y: Motor object instance that controls y axis position
+            mm_per_pixel: mm per pixel used to convert evaluator results (which are given in pixels)
             max_offset: (x, y) tuple of maximum allowed error. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
@@ -45,6 +46,7 @@ class WellPositionController(QThread):
         self.max_offset = max_offset
         self.motor_x = motor_x
         self.motor_y = motor_y
+        self.mm_per_pixel = mm_per_pixel
         self.camera_started = False
         self.request_new_image = False  # Used by get_new_image and img_update to update self.img with a new frame from the pivideostream class
         self.img = None

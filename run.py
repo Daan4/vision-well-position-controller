@@ -21,10 +21,15 @@ Y_LIM_pin = 0
 ## mm per step
 MM_PER_STEP = 0.01  # todo determine this
 
+## mm per pixel
+MM_PER_PIXEL = 0.01  # todo determine this (would be height dependent as well)
+
+
 ## define camera settings
 RESOLUTION = (640, 480)  # width, height
 FRAME_RATE = 30
 USE_VIDEO_PORT = True
+
 
 ## define evaluator settings
 DEBUG_MODE = True
@@ -32,11 +37,13 @@ DEBUG_MODE = True
 motor_x = None
 motor_y = None
 
+
 def catch_sigint(sig, frame):
     print("stopping motors and quitting")
     motor_x.stop()
     motor_y.stop()
     sys.exit(0)
+
 
 # Run this file to start
 if __name__ == '__main__':
@@ -63,7 +70,7 @@ if __name__ == '__main__':
                                  (16, 16), 
                                  motor_x, 
                                  motor_y,
-                                 vs,
+                                 MM_PER_PIXEL,
                                  e, 
                                  target_coordinates=target_coordinates,
                                  debug=DEBUG_MODE)
