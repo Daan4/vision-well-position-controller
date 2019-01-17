@@ -19,16 +19,23 @@ Y_DIR_pin = 25
 Y_LIM_pin = 0
 
 ## mm per step
-MM_PER_STEP = 0.01  # todo determine this
+MM_PER_STEP = 0.005  # appears to be the same for x and y
+
+# used x_1, x_2, y_1, y_2 images to determine above variables
+# div = 0.1mm
+# steps_x = 2500
+# steps_y = 2200
+# mm_x = 12.5
+# mm_y = 10.6
 
 ## mm per pixel
-MM_PER_PIXEL = 0.01  # todo determine this (would be height dependent as well)
+MM_PER_PIXEL = 0.00254 # (depends on height?, this is for settings on 17/1/19)
 
 
 ## define camera settings
 RESOLUTION = (640, 480)  # width, height
 FRAME_RATE = 30
-USE_VIDEO_PORT = True
+USE_VIDEO_PORT = False
 
 
 ## define evaluator settings
@@ -62,15 +69,16 @@ if __name__ == '__main__':
     
 
     # Set up well position controller and evaluators
-    setpoints_csv_file = "setpoints/24.csv"
+    setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
-    e = ((WellBottomFeaturesEvaluator(RESOLUTION, DEBUG_MODE), 1),
-         (HoughTransformEvaluator(RESOLUTION, DEBUG_MODE), 1))
+    e = (WellBottomFeaturesEvaluator(RESOLUTION, DEBUG_MODE), 1)
+         #(HoughTransformEvaluator(RESOLUTION, DEBUG_MODE), 1))
     wpc = WellPositionController(setpoints_csv_file, 
                                  (16, 16), 
                                  motor_x, 
                                  motor_y,
                                  MM_PER_PIXEL,
+                                 pio,
                                  e, 
                                  target_coordinates=target_coordinates,
                                  debug=DEBUG_MODE)
