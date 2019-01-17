@@ -41,6 +41,8 @@ USE_VIDEO_PORT = False
 
 # enable debug mode for controller and evaluators
 ENABLE_DEBUG_MODE = True
+# set max random error in debug mode (applied +- in both x and y direction)
+DEBUG_MODE_MAX_ERROR_MM = 5
 
 # enable logging data to csv file
 ENABLE_LOGGING = True
@@ -87,7 +89,8 @@ if __name__ == '__main__':
                                  # e2,
                                  target_coordinates=target_coordinates,
                                  debug=ENABLE_DEBUG_MODE,
-                                 logging=ENABLE_LOGGING)
+                                 logging=ENABLE_LOGGING,
+                                 debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM)
                                  
     # connect pivideostream frame emitter to update function in wpc
     vs.ready.connect(wpc.img_update)

@@ -23,9 +23,9 @@ class WellPositionController(QThread):
     ready = pyqtSignal()
     name = "WellPositionController"
     data = None
-    DEBUG_MODE_MAX_ERROR_MM = 5  # Max random error introduced in debug mode
 
-    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, pio, *evaluators, target_coordinates=None, debug=False, logging=False):
+    def __init__(self, setpoints_csv, max_offset, motor_x, motor_y, mm_per_pixel, pio, *evaluators,
+                 target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -56,6 +56,7 @@ class WellPositionController(QThread):
         self.img = None
         self.debug = debug
         self.logging = logging
+        self.debug_mode_max_error_mm = debug_mode_max_error_mm
         if self.logging:
             # Create logging csv and add header text
             if not os.path.isdir('/logs'):
@@ -89,7 +90,7 @@ class WellPositionController(QThread):
         Sets self.target to the newly calculated diaphragm center.
         """
         # get new image
-        while not self.get_new_image():
+        while not self.get_new_image():  # get_new_image returns None when the camera is still starting up
             sleep(0.1)
         # make a list of centroids and their weights
         centroids = []
@@ -235,6 +236,7 @@ class WellPositionController(QThread):
         # Todo: this assumes the well plate position starts @ 0,0 : ie a corner of the well plate is in frame
         # Todo: the initial previous setpoint probably needs to be set to some known initial offset
         # Todo: the motors should also start from a known position (probably against the limit switches)
+        # Todo: For now assume that we start @ well A1, with calibration being done manually beforehand
         previous_setpoint_x = 0
         previous_setpoint_y = 0
         for i, setpoint in enumerate(modified_setpoints):
@@ -244,15 +246,16 @@ class WellPositionController(QThread):
                 self.move_motors(setpoint_x - previous_setpoint_x, setpoint_y - previous_setpoint_y)
             else:
                 # In debug mode add a random error
-                self.move_motors(setpoint_x - previous_setpoint_x + randint(-self.DEBUG_MODE_MAX_ERROR_MM, self.DEBUG_MODE_MAX_ERROR_MM),
-                                 setpoint_y - previous_setpoint_y + randint(-self.DEBUG_MODE_MAX_ERROR_MM, self.DEBUG_MODE_MAX_ERROR_MM))
+                self.move_motors(setpoint_x - previous_setpoint_x + randint(-self.debug_mode_max_error_mm, self.debug_mode_max_error_mm),
+                                 setpoint_y - previous_setpoint_y + randint(-self.debug_mode_max_error_mm, self.debug_mode_max_error_mm))
 
             total_error = [0, 0]  # Keep track of the total error so that we can save the new offset for the next run
             passed = False
             while not passed:
                 # Use camera feedback to improve position until it passes
                 # Get new image frame
-                self.get_new_image()
+                while not self.get_new_image():  # get_new_image returns None when the camera is still starting up
+                    sleep(0.1)
                 # evaluate image
                 result = self.evaluate_position(self.img, setpoint)
                 if self.debug:
@@ -281,8 +284,7 @@ class WellPositionController(QThread):
                 f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
                 
     def calibrate_mm_per_step_photos(self):
-        #x
-        while not self.get_new_image():
+        while not self.get_new_image():  # get_new_image returns None when the camera is still starting up
             sleep(0.5)
         self.get_new_image()
         cv2.imshow('image', self.img)
