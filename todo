@@ -11,4 +11,9 @@ then use additional features for classification instead, like:
 
 log as much data as possible (logging flag) to csv file to make plots for the report
 
+log per application run in a csv file named with the date:
+    timestamp, error for each evaluator, target coordinates, modified setpoint (+ known offset + randomized error)
+
+logging added -> needs to be tested
+
 convert pixel offset result to mm
