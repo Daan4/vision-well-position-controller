@@ -1,14 +1,14 @@
-implement more evaluators: done, implemented hough transform, idk what else would be good
-    - maybe add area as a metric for bottom features somehow?
+use a smaller kernel for morphological open, just to split up blobs
+then use additional features for classification instead, like:
+    signature
+    centroid
+    area
+    axis of least moment
+    eccentricity
+    aspect ratio
+    elongatedness
+    moments
 
+log as much data as possible (logging flag) to csv file to make plots for the report
 
-implement evaluators in c: done for features algorithm, hough transform will just be in opencv
-    - compare c vs opencv algorithm performance on a raspberry pi
-    - optimize c implementation if needed (morphology seems to be the big one, maybe try a seperable kernel or optimize the function)
-
-
-use QThread, slots and signals for position controller
-    - acquire image frame from pivideostream when required
-    - control motor position asynchronously
-
-get some main function / interface going
+convert pixel offset result to mm
