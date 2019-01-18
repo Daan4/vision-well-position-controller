@@ -152,9 +152,13 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cv2.resizeWindow('Threshold', self.img_width, self.img_height)
             cv2.moveWindow('Threshold', 870, 100)
 
-            cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Morphology', self.img_width, self.img_height)
-            cv2.moveWindow('Morphology', 1280, 100)
+            cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Scores', self.img_width, self.img_height)
+            cv2.moveWindow('Scores', 1280, 100)
+
+            # cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
+            # cv2.resizeWindow('Morphology', self.img_width, self.img_height)
+            # cv2.moveWindow('Morphology', 1280, 100)
 
             cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('Result', self.img_width, self.img_height)
@@ -164,7 +168,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         # parameters were originally determined for resolution of 410x308
         # blur
         self.blur_kernelsize = (25, 25)  # Has to be a square (for c implementation)
-        self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410).astype(int))
+        self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410 + 0.5).astype(int))
         self.blur_sigma = 100
 
         # gamma
@@ -172,11 +176,12 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.gamma = 6
 
         # morphology
-        self.open_kernelsize = (49, 49)  # Has to be a square (for c implementation)
-        self.open_kernelsize = tuple(np.multiply(self.open_kernelsize, self.img_width / 410).astype(int))
+        #self.open_kernelsize = (49, 49)  # Has to be a square (for c implementation)
+        #self.open_kernelsize = tuple(np.multiply(self.open_kernelsize, self.img_width / 410 + 0.5).astype(int))
 
         # classification
-        self.metric_threshold = 0.8
+        #self.metric_threshold = 0.8
+        self.area_threshold = int(200 * self.img_width / 410 + 0.5)
 
     def evaluate(self, img, target=(0, 0), benchmarking=False):
         """ Finds the position error by finding the well bottom centroid.
@@ -234,24 +239,55 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 cv2.imshow('Threshold', img)
 
             # Morphology
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.open_kernelsize)
-            img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-            if self.debug:
-                cv2.imshow('Morphology', img)
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.open_kernelsize)
+            # img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+            # if self.debug:
+            #     cv2.imshow('Morphology', img)
 
-            # Keep only the well bottom region
-            # By looking at region features
-            # step 1: Keep only blobs that score above roundness threshold
-            # step 2: Keep largest blob remaining after step 1
-            largest_area_above_threshold = -1
+            # # Keep only the well bottom region
+            # # By looking at region features
+            # # step 1: Keep only blobs that score above roundness threshold
+            # # step 2: Keep largest blob remaining after step 1
+            # largest_area_above_threshold = -1
+            # best_match = None
+            # im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            # for c in contours:
+            #     area = cv2.contourArea(c)
+            #     perimeter = cv2.arcLength(c, True)
+            #     metric = 4 * np.pi * area / perimeter ** 2
+            #     if metric > self.metric_threshold and area > largest_area_above_threshold:
+            #         largest_area_above_threshold = area
+            #         best_match = c
+
+            # Select best match blob by looking at the mean score for
+            # roundness and eccentricity, lower is better
             best_match = None
+            best_score = 1.1
+            area_threshold = self.area_threshold
             im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             for c in contours:
                 area = cv2.contourArea(c)
+                if area < area_threshold:
+                    continue
                 perimeter = cv2.arcLength(c, True)
-                metric = 4 * np.pi * area / perimeter ** 2
-                if metric > self.metric_threshold and area > largest_area_above_threshold:
-                    largest_area_above_threshold = area
+                roundness = 4 * np.pi * area / perimeter ** 2
+
+                # Calculate eccentricity from central moments as such:
+                # e = ((mu20 - mu02)^2 - 4*mu11^2)/(mu20+mu02)^2
+                m = cv2.moments(c, True)
+                eccentricity = ((m['m20'] - m['m02']) ** 2 - 4 * m['m11'] ** 2) / (m['m20'] + m['m02']) ** 2
+                score = (1 - roundness + eccentricity) / 2
+
+                if self.debug:
+                    # Overlay scores on image in debug mode
+                    im3 = img.copy()
+                    cX = int(m["m10"] / m["m00"])
+                    cY = int(m["m01"] / m["m00"])
+                    cv2.putText(im3, str(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 4, 255, 2, cv2.LINE_AA)
+                    cv2.imshow('Scores', im3)
+
+                if score < best_score:
+                    best_score = score
                     best_match = c
 
             # calculate centroid for best match blob
