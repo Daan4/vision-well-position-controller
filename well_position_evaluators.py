@@ -176,11 +176,11 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.gamma = 6
 
         # morphology
-        #self.open_kernelsize = (49, 49)  # Has to be a square (for c implementation)
-        #self.open_kernelsize = tuple(np.multiply(self.open_kernelsize, self.img_width / 410 + 0.5).astype(int))
+        self.open_kernelsize = (49, 49)  # Has to be a square (for c implementation)
+        self.open_kernelsize = tuple(np.multiply(self.open_kernelsize, self.img_width / 410 + 0.5).astype(int))
 
         # classification
-        #self.metric_threshold = 0.8
+        self.metric_threshold = 0.8
         self.area_threshold = int(200 * self.img_width / 410 + 0.5)
 
     def evaluate(self, img, target=(0, 0), benchmarking=False):
@@ -201,6 +201,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cols = img.shape[1]
             rows = img.shape[0]
             data = list(img.flat)
+            # todo update c implementation
             return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
                                             self.open_kernelsize[0], self.metric_threshold)
         else:
@@ -265,6 +266,9 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             best_score = 1.1
             area_threshold = self.area_threshold
             im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            if self.debug:
+                im3 = img.copy()  # Copy to overlay results in
+                im3 = cv2.cvtColor(im3, cv2.COLOR_GRAY2BGR)
             for c in contours:
                 area = cv2.contourArea(c)
                 if area < area_threshold:
@@ -280,10 +284,9 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
                 if self.debug:
                     # Overlay scores on image in debug mode
-                    im3 = img.copy()
                     cX = int(m["m10"] / m["m00"])
                     cY = int(m["m01"] / m["m00"])
-                    cv2.putText(im3, str(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 4, 255, 2, cv2.LINE_AA)
+                    cv2.putText(im3, '{0:.3f}'.format(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
                     cv2.imshow('Scores', im3)
 
                 if score < best_score:
@@ -362,11 +365,13 @@ def test_wellbottomfeaturesevaluator():
         cv2.waitKey(0)
     else:
         # single run to compare c vs opencv result
-        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
         x = WellBottomFeaturesEvaluator((410, 308), True)
-        print('opencv: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True)))
-        x.debug = False
-        print('c: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)))
+        img = cv2.imread(imgpath, cv2.CV_8UC1)
+        print('opencv: {}'.format(x.evaluate(img, (227, 144), False)))
+        cv2.waitKey(0)
+        # x.debug = False
+        # print('c: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)))
 
 
 def test_houghtransformevaluator():
