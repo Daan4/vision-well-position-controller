@@ -42,7 +42,9 @@ USE_VIDEO_PORT = False
 # enable debug mode for controller and evaluators
 ENABLE_DEBUG_MODE = True
 # set max random error in debug mode (applied +- in both x and y direction)
-DEBUG_MODE_MAX_ERROR_MM = 5
+DEBUG_MODE_MAX_ERROR_MM = 2
+
+MAX_ALLOWED_ERROR_MM = (0.05, 0.05)
 
 # enable logging data to csv file
 ENABLE_LOGGING = True
@@ -78,9 +80,9 @@ if __name__ == '__main__':
     setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
     e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
-    e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
+    #e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
     wpc = WellPositionController(setpoints_csv_file,
-                                 (16, 16),
+                                 MAX_ALLOWED_ERROR_MM,
                                  motor_x,
                                  motor_y,
                                  MM_PER_PIXEL,
