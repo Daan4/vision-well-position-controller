@@ -138,19 +138,19 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.img_width, self.img_height = resolution
         if self.debug:
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Blur', self.img_width, self.img_height)
+            cv2.resizeWindow('Blur', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
             cv2.moveWindow('Blur', 50, 100)
 
             cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Gamma', self.img_width, self.img_height)
+            cv2.resizeWindow('Gamma', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
             cv2.moveWindow('Gamma', 460, 100)
 
             cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Threshold', self.img_width, self.img_height)
+            cv2.resizeWindow('Threshold', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
             cv2.moveWindow('Threshold', 870, 100)
 
             cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Scores', self.img_width, self.img_height)
+            cv2.resizeWindow('Scores', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
             cv2.moveWindow('Scores', 1280, 100)
 
             # cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
@@ -158,7 +158,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # cv2.moveWindow('Morphology', 1280, 100)
 
             cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Result', self.img_width, self.img_height)
+            cv2.resizeWindow('Result', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
             cv2.moveWindow('Result', 50, 500)
 
         # Evaluation function parameters, scaled by image width if needed
@@ -202,7 +202,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             rows = img.shape[0]
             data = list(img.flat)
             return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
-                                            self.open_kernelsize[0], self.metric_threshold)
+                                            self.threshold, self.area_threshold)
         else:
             if benchmarking:
                 self.debug = False # dont show live images when benchmarking
