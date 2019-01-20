@@ -131,9 +131,6 @@ class HoughTransformEvaluator(WellPositionEvaluator):
 
 
 class WellBottomFeaturesEvaluator(WellPositionEvaluator):
-    # todo
-    # note: c vision parameters are currently not passed, so also change the c library
-    # -> pass them
     def __init__(self, resolution, debug=False):
         super().__init__(debug)
         # Set up debug windows if debug mode is on
@@ -160,8 +157,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.close_kernelsize = (10, 10)
 
         # classification
-        self.metric_threshold = 0.8
-        self.area_threshold = 10000
+        #self.metric_threshold = 0.8
+        self.area_threshold = 5000
 
     def evaluate(self, img, target=(0, 0), benchmarking=False):
         """ Finds the position error by finding the well bottom centroid.
@@ -183,7 +180,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             data = list(img.flat)
             # todo update c implementation
             return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
-                                            self.open_kernelsize[0], self.metric_threshold)
+                                            self.threshold, self.area_threshold)
         else:
             # recreate windows
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
@@ -287,7 +284,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             if self.debug:
                 im3 = img.copy()  # Copy to overlay results in
                 im3 = cv2.cvtColor(im3, cv2.COLOR_GRAY2BGR)
-            for c in contours:
+            for i, c in enumerate(contours):
                 area = cv2.contourArea(c)
                 if area < area_threshold:
                     continue
@@ -297,8 +294,10 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 # Calculate eccentricity from central moments as such:
                 # e = ((mu20 - mu02)^2 - 4*mu11^2)/(mu20+mu02)^2
                 m = cv2.moments(c, True)
-                eccentricity = ((m['m20'] - m['m02']) ** 2 - 4 * m['m11'] ** 2) / (m['m20'] + m['m02']) ** 2
+                eccentricity = ((m['nu20'] - m['nu02']) ** 2 - 4 * m['nu11'] ** 2) / (m['nu20'] + m['nu02']) ** 2
                 score = (1 - roundness + eccentricity) / 2
+
+                print("{} score {} roundness {} eccentricity {}".format(i, score, roundness, eccentricity))
 
                 if self.debug:
                     # Overlay scores on image in debug mode
@@ -385,10 +384,15 @@ def test_wellbottomfeaturesevaluator():
         cv2.waitKey(0)
     else:
         # single run to compare c vs opencv result
-        imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        # imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+
         x = WellBottomFeaturesEvaluator((410, 308), True)
         img = cv2.imread(imgpath, cv2.CV_8UC1)
         print('opencv: {}'.format(x.evaluate(img, (227, 144), False)))
+
+        x.debug = False
+        print('c: {}'.format(x.evaluate(img, (227, 144), False)))
         cv2.waitKey(0)
         # x.debug = False
         # print('c: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)))
