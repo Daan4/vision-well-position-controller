@@ -148,7 +148,7 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
 //        Py_RETURN_NONE;
 //    }
     int8_t best_match = -1;
-    float best_score = 1.1f;
+    float best_score = -1000.0f;
     float roundness_metric, eccentricity_metric, score;
     float m20, m02, m11;
     uint32_t blob_count;
@@ -166,9 +166,9 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
         m02 = normalizedCentralMoments(src, i, 0, 2);
         m11 = normalizedCentralMoments(src, i, 1, 1);
         eccentricity_metric = ((m20 - m02) * (m20 - m02) - 4 * m11 * m11) / ((m20 + m02) * (m20 + m02));
-        score = (1 - roundness_metric + eccentricity_metric) / 2;
+        score = (roundness_metric + eccentricity_metric) / 2;
 
-        if(score < best_score) {
+        if(score > best_score) {
             best_score = score;
             best_match = i;
         }
