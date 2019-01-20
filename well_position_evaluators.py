@@ -36,7 +36,6 @@ class HoughTransformEvaluator(WellPositionEvaluator):
         self.centroid = None
         self.img_width, self.img_height = resolution
         if self.debug:
-            # todo if using this use unique window names
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
             cv2.resizeWindow('Blur', self.img_width, self.img_height)
             cv2.moveWindow('Blur', 50, 100)
@@ -126,7 +125,7 @@ class HoughTransformEvaluator(WellPositionEvaluator):
                     cv2.imshow('Result', original)
             # assume circle at index 0 is the best match
             self.centroid = (circles[0, 0, 0], circles[0, 0, 1])
-            offset = tuple(np.subtract(self.centroid, target))
+            offset = tuple(np.subtract(target, self.centroid))
         return offset
 
 
@@ -137,6 +136,30 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.debug = debug
         self.centroid = None
         self.img_width, self.img_height = resolution
+        if self.debug:
+            cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Blur', self.img_width, self.img_height)
+            cv2.moveWindow('Blur', 50, 100)
+
+            cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Gamma', self.img_width, self.img_height)
+            cv2.moveWindow('Gamma', 460, 100)
+
+            cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Threshold', self.img_width, self.img_height)
+            cv2.moveWindow('Threshold', 870, 100)
+
+            cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Scores', self.img_width, self.img_height)
+            cv2.moveWindow('Scores', 1280, 100)
+
+            # cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
+            # cv2.resizeWindow('Morphology', self.img_width, self.img_height)
+            # cv2.moveWindow('Morphology', 1280, 100)
+
+            cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('Result', self.img_width, self.img_height)
+            cv2.moveWindow('Result', 50, 500)
 
         # Evaluation function parameters, scaled by image width if needed
         # parameters were originally determined for resolution of 410x308
@@ -144,7 +167,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.blur_kernelsize = (25, 25)  # Has to be a square (for c implementation)
         #self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410 + 0.5).astype(int))
         self.blur_sigma = 1
-        
+
         # manual threshold
         self.threshold = 30
 
@@ -178,36 +201,9 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cols = img.shape[1]
             rows = img.shape[0]
             data = list(img.flat)
-            # todo update c implementation
             return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
-                                            self.threshold, self.area_threshold)
+                                            self.open_kernelsize[0], self.metric_threshold)
         else:
-            # recreate windows
-            cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Blur', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Blur', 50, 100)
-
-            cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Gamma', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Gamma', 460, 100)
-
-            cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Threshold', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Threshold', 870, 100)
-
-            cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Scores', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Scores', 1280, 100)
-
-            # cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
-            # cv2.resizeWindow('Morphology', self.img_width, self.img_height)
-            # cv2.moveWindow('Morphology', 1280, 100)
-
-            cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Result', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Result', 50, 500)
-            
-            
             if benchmarking:
                 self.debug = False # dont show live images when benchmarking
             # use opencv library and show live images
@@ -218,7 +214,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # Gaussian filter
             img = cv2.GaussianBlur(img, self.blur_kernelsize, self.blur_sigma)
             if self.debug:
-                cv2.imshow('Blur', cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
+                cv2.imshow('Blur', img)
 
             # Auto contrast
             _min = np.min(img)
@@ -234,18 +230,16 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             img = np.multiply(img, self.c * 255)
             np.putmask(img, img > 255, 255)
             img = img.astype(np.uint8)
-            
-
             if self.debug:
-                cv2.imshow('Gamma', cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
-                
+                cv2.imshow('Gamma', img)
+
             # Otsu threshold
-            #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  
+            #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # For some reason img is not 8uc1 before, even though i cast to uint8 and cvt to gray initially???
             #_, img = cv2.threshold(img, 0, 255, cv2.THRESH_OTSU)
             #if self.debug:
                 #cv2.imshow('Threshold', img)
-                
+
             # manual threshold
             _, img = cv2.threshold(img, self.threshold, 255, cv2.THRESH_BINARY)
             # close to fill small holes
@@ -329,8 +323,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                     cv2.imshow('Result', cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
             if benchmarking:
                 self.debug = True
-            
-            
+
+
             return offset
 
 

@@ -1,19 +1,11 @@
-use a smaller kernel for morphological open, just to split up blobs
-then use additional features for classification instead, like:
-    signature
-    centroid
-    area
-    axis of least moment
-    eccentricity
-    aspect ratio
-    elongatedness
-    moments
+test feedback loop with half-step (or less) set.
 
-log as much data as possible (logging flag) to csv file to make plots for the report
+benchmark vision algorithm execution time
 
-log per application run in a csv file named with the date:
-    timestamp, error for each evaluator, target coordinates, modified setpoint (+ known offset + randomized error)
+log some data to csv in debug mode for later plotting
 
-logging added -> needs to be tested
+make opencv eccentricity normalized between 0 and 1 somehow like in matlab
 
-convert pixel offset result to mm
+potentially add convexity as another feature?
+
+how to do classification? Simple average of values? Or try a k nearest thing
