@@ -9,3 +9,5 @@ test c using 24.csv with _offsets setpoints from the first run
 
 fix c implementation:
 rpi gets segmentation errors when trying to access the passed image data list
+
+determine if offset has to be inverted during calibration or not
