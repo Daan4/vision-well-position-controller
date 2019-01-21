@@ -107,10 +107,9 @@ class WellPositionController(QThread):
         centroids = []
         weights = []
         for evaluator, weight in self.evaluators:
-            evaluator.evaluate(self.img)
-            centroid = evaluator.centroid
+            centroid = evaluator.evaluate(self.img, target=(0, 0))
             if centroid is not None:
-                centroids.append(evaluator.centroid)
+                centroids.append(centroid)
                 weights.append(weight)
         # calculate the average centroid
         self.target = tuple(np.average(centroids, 0, weights).astype(int))
