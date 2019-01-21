@@ -1,11 +1,11 @@
-test feedback loop with half-step (or less) set.
+benchmark vision algorithm execution time (c and opencv)
 
-benchmark vision algorithm execution time
+test opencv using 24.csv
+test opencv using 24.csv with _offsets setpoints from the first run
 
-log some data to csv in debug mode for later plotting
+test c using 50x random error
+test c using 24.csv
+test c using 24.csv with _offsets setpoints from the first run
 
-make opencv eccentricity normalized between 0 and 1 somehow like in matlab
-
-potentially add convexity as another feature?
-
-how to do classification? Simple average of values? Or try a k nearest thing
+fix c implementation:
+rpi gets segmentation errors when trying to access the passed image data list
