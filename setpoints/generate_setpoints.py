@@ -1,9 +1,13 @@
 def generate_setpoints(filename, initial_offset_y, initial_offset_x, offset_x, offset_y, rows, columns):
-    """Write setpoints to testsetpoints.csv
+    """Write setpoints indicating the centers of wells in a well plate to a csv file.
+       Each line can be interpreted as a tuple (setpoint_x, setpoint_x), with setpoints given in the same unit as the parameters.
+
+       Well order will be (for example for a 24 well plate): A1...A6, B6...B1, C1..C6 etc.
+
     Args:
-        filename: name of generated csv file
-        initial_offset_x: initial offset from corner to well center a1 -- for now this is hardcoded in globals.py, leave at 0
-        initial_offset_y: initial offset from corner to well center a1 -- for now this is hardcoded in globals.py, leave at 0
+        filename: filename/path to the file to be generated
+        initial_offset_x: initial offset from the corner of the plate to well center a1
+        initial_offset_y: initial offset from the corner of the plate to well center a1
         offset_x: distance between wells in x direction
         offset_y: distance between wells in y direction
         rows: number of wells in y direction
@@ -14,13 +18,7 @@ def generate_setpoints(filename, initial_offset_y, initial_offset_x, offset_x, o
         for y in range(rows):
             lines_buffer = []
             for x in range(columns):
-                # Compensate hysteresis on x axis by changing the setpoints
-                if y % 2 != 0 and x != columns - 1:
-                    setpoint_x = round(initial_offset_x + x * offset_x, 2)
-                elif y % 2 == 0 and (x == 0 and y != 0):
-                    setpoint_x = round(initial_offset_x + x * offset_x, 2)
-                else:
-                    setpoint_x = round(initial_offset_x + x * offset_x, 2)
+                setpoint_x = round(initial_offset_x + x * offset_x, 2)
                 setpoint_y = round(initial_offset_y + y * offset_y, 2)
                 lines_buffer.append("{}, {}\n".format(setpoint_x, setpoint_y))
             if y % 2 != 0:
@@ -30,7 +28,8 @@ def generate_setpoints(filename, initial_offset_y, initial_offset_x, offset_x, o
 
 
 if __name__ == '__main__':
-    # settings for 24 well plate
-    #generate_setpoints("setpoints\\24.csv", 13.49, 15.13, 19.5, 19.5, 4, 6)
+    # settings for 24 well plate, assuming we start at the topleft corner of the plate
+    # generate_setpoints("setpoints\\24.csv", 13.49, 15.13, 19.5, 19.5, 4, 6)
+
     # settings for 24 well plate, assuming that we start on well A1
     generate_setpoints("24.csv", 0, 0, 19.5, 19.5, 4, 6)
