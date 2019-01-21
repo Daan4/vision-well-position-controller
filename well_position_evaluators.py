@@ -273,7 +273,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # Select best match blob by looking at the mean score for
             # roundness and eccentricity, lower is better
             best_match = None
-            best_score = -1000
+            best_score = 1000
             area_threshold = self.area_threshold
             im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             if self.debug:
@@ -299,7 +299,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
                 # but for some reason it seems to be higher is better with random bounds? (but around -2...1 usually?)
                 eccentricity = ((m['nu20'] - m['nu02']) ** 2 - 4 * m['nu11'] ** 2) / (m['nu20'] + m['nu02']) ** 2
-                score = (roundness + eccentricity) / 2
+                score = (1-roundness + eccentricity) / 2
 
                 print("{} score {} roundness {} eccentricity {}".format(i, score, roundness, eccentricity))
 
@@ -310,7 +310,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                     cv2.putText(im3, '{0:.3f}'.format(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
                     cv2.imshow('Scores', im3)
 
-                if score > best_score:
+                if score < best_score:
                     best_score = score
                     best_match = c
 
