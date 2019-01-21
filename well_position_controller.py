@@ -25,7 +25,7 @@ class WellPositionController(QThread):
     data = None
 
     def __init__(self, setpoints_csv, max_offset_mm, motor_x, motor_y, mm_per_pixel, pio, *evaluators,
-                 target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5):
+                 target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5, debug_mode_min_error_mm=0):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -57,6 +57,7 @@ class WellPositionController(QThread):
         self.debug = debug
         self.logging = logging
         self.debug_mode_max_error_um = debug_mode_max_error_mm * 1000
+        self.debug_mode_min_error_um = debug_mode_min_error_mm * 1000
         if self.logging:
             # Create logging csv and add header text
             if not os.path.isdir('logs'):
@@ -128,7 +129,7 @@ class WellPositionController(QThread):
         offset = np.average(offsets, 0, weights)
         # convert offset to mm
         offset_mm = np.multiply(offset, self.mm_per_pixel)
-        print("offset_mm: {}".format(offset_mm))
+        #print("offset_mm: {}".format(offset_mm))
         if abs(offset_mm[0]) < self.max_offset_mm[0] and abs(offset_mm[1]) < self.max_offset_mm[1]:
             result = True
         else:
@@ -254,8 +255,16 @@ class WellPositionController(QThread):
                 previous_setpoint_y = setpoint_y
             else:
                 # In debug mode add a random error
-                setpoint_x2 = setpoint_x + randint(-self.debug_mode_max_error_um, self.debug_mode_max_error_um) / 1000
-                setpoint_y2 = setpoint_x + randint(-self.debug_mode_max_error_um, self.debug_mode_max_error_um) / 1000
+                random_error_x = randint(self.debug_mode_min_error_um, self.debug_mode_max_error_um) / 1000
+                random_error_y = randint(self.debug_mode_min_error_um, self.debug_mode_max_error_um) / 1000
+                # random direction
+                if randint(0, 1) == 0:
+                    random_error_x *= -1
+                if randint(0, 1) == 0:
+                    random_error_y *= -1
+                
+                setpoint_x2 = setpoint_x + random_error_x
+                setpoint_y2 = setpoint_x + random_error_y
                 self.move_motors(setpoint_x2 - previous_setpoint_x,
                                  setpoint_y2 - previous_setpoint_y)
                 previous_setpoint_x = setpoint_x
@@ -275,8 +284,9 @@ class WellPositionController(QThread):
                 result = self.evaluate_position(self.img, (setpoint_x, setpoint_y))
                 if self.debug:
                     # Require user input in debug mode, so that results can be inspected
+                    
                     print("WPC DEBUG MODE: evaluation result = {}".format(result))
-                    input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
+                    #input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
                     # continue with the next well
