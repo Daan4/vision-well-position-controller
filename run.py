@@ -104,10 +104,7 @@ if __name__ == '__main__':
                                  debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM,
                                  debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM)
 
-    # Connect qt signals and slots
-    # connect pivideostream frame emitter to update function in wpc
-    vs.ready.connect(wpc.img_update)
-
+    # Connect qt signals and slots for displaying images
     # connect evaluator emitters to update function in gui to display images using qt
     e1[0].update_blur.connect(main_window.update_blur)
     e1[0].update_gamma.connect(main_window.update_gamma)
