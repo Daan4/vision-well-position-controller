@@ -68,7 +68,18 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
                           &kernel_size, &sigma, &c, &g, &threshold_param,
                           &area_threshold)) { return NULL; }
     // Parse args to image_t struct
-    image_t *src = newBasicImagePython(imgdata_list, imgcols, imgrows);
+    //image_t *src = newBasicImagePython(imgdata_list, imgcols, imgrows);
+    // Create image_t struct
+    image_t *src = newBasicImage(imgcols, imgrows);
+
+    if(src == NULL) { return NULL; }
+    // Parse data from python list to c array
+    // printf("data\n");
+    for(int32_t i=0; i<imgrows*imgcols; i++) {
+        src->data[i] = (basic_pixel_t) PyLong_AsLong(PyList_GetItem(imgdata_list, i));
+        // printf("%d\n", img->data[i]);
+    }
+    // printf("rows %d cols %d\n", rows, cols);
     // Parse target from python tuple to array
     target[0] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 0));
     target[1] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 1));
