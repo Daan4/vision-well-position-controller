@@ -1,18 +1,15 @@
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 import cv2
 import numpy as np
 import wormvision
 import timeit
-import sys
 from PyQt5.QtCore import pyqtSignal, QObject
 
 
 class WellPositionEvaluator(QObject):
     @abstractmethod
-    def __init__(self, debug):
+    def __init__(self):
         super().__init__()
-        self.centroid = None  # If a centroid is found in the evaluate function it can be stored here.
-                              # The centroids are used during calibration to determine the target.
 
     @abstractmethod
     def evaluate(self, img, target):
@@ -33,10 +30,9 @@ class WellPositionEvaluator(QObject):
 
 class HoughTransformEvaluator(WellPositionEvaluator):
     def __init__(self, resolution, debug=False):
-        super().__init__(debug)
+        super().__init__()
         # Set up debug windows if debug mode is on
         self.debug = debug
-        self.centroid = None
         self.img_width, self.img_height = resolution
         if self.debug:
             cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
@@ -114,7 +110,6 @@ class HoughTransformEvaluator(WellPositionEvaluator):
         # If more than 1 circle is found, either assume the best match or return none (todo which is best?)
         offset = None
         if circles is None:
-            self.centroid = None
             if self.debug:
                 cv2.imshow('Result', original)
         else:
@@ -127,8 +122,8 @@ class HoughTransformEvaluator(WellPositionEvaluator):
                     cv2.circle(original, (i[0], i[1]), 2, (0, 0, 255), 3)
                     cv2.imshow('Result', original)
             # assume circle at index 0 is the best match
-            self.centroid = (circles[0, 0, 0], circles[0, 0, 1])
-            offset = tuple(np.subtract(target, self.centroid))
+            centroid = (circles[0, 0, 0], circles[0, 0, 1])
+            offset = tuple(np.subtract(target, centroid))
         return offset
 
 
@@ -140,41 +135,12 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
     update_result = pyqtSignal(np.ndarray)
     
     def __init__(self, resolution, debug=False):
-        super().__init__(debug)
-        # Set up debug windows if debug mode is on
+        super().__init__()
         self.debug = debug
-        self.centroid = None
         self.img_width, self.img_height = resolution
-        #if self.debug:
-            #cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
-            #cv2.resizeWindow('Blur', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            #cv2.moveWindow('Blur', 50, 100)
 
-            #cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
-            #cv2.resizeWindow('Gamma', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            #cv2.moveWindow('Gamma', 460, 100)
-
-            #cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
-            #cv2.resizeWindow('Threshold', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            #cv2.moveWindow('Threshold', 870, 100)
-
-            #cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
-            #cv2.resizeWindow('Scores', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            #cv2.moveWindow('Scores', 1280, 100)
-
-            ## cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
-            ## cv2.resizeWindow('Morphology', self.img_width, self.img_height)
-            ## cv2.moveWindow('Morphology', 1280, 100)
-
-            #cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
-            #cv2.resizeWindow('Result', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            #cv2.moveWindow('Result', 50, 500)
-
-        # Evaluation function parameters, scaled by image width if needed
-        # parameters were originally determined for resolution of 410x308
         # blur
         self.blur_kernelsize = (25, 25)  # Has to be a square (for c implementation)
-        #self.blur_kernelsize = tuple(np.multiply(self.blur_kernelsize, self.img_width / 410 + 0.5).astype(int))
         self.blur_sigma = 1
 
         # manual threshold
@@ -189,20 +155,17 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.close_kernelsize = (10, 10)
 
         # classification
-        #self.metric_threshold = 0.8
         self.area_threshold = 5000
 
-    def evaluate(self, img, target=(0, 0), benchmarking=False):
+    def evaluate(self, img, target=(0, 0)):
         """ Finds the position error by finding the well bottom centroid.
         If self.debug = True, opencv is used instead of the c library
 
         Args:
             img: 2d grayscale image list
             target: target coordinates (topleft pixel is 0,0)
-            benchmarking: set to true to hide windows when using opencv
 
         Returns: offset tuple (x, y) position error
-
         """
         if not self.debug:
             # use custom vision library
@@ -210,13 +173,9 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             cols = img.shape[1]
             rows = img.shape[0]
             data = list(img.flat)
-            offset = wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
+            return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
                                             self.threshold, self.area_threshold)
-            self.centroid = offset
-            return offset
         else:
-            if benchmarking:
-                self.debug = False # dont show live images when benchmarking
             # use opencv library and show live images
             if self.debug:
                 # Make a copy when debug mode is on so that we can overlay the results on it later.
@@ -225,7 +184,6 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # Gaussian filter
             img = cv2.GaussianBlur(img, self.blur_kernelsize, self.blur_sigma)
             if self.debug:
-                #cv2.imshow('Blur', img)
                 self.update_blur.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
             # Auto contrast
@@ -243,15 +201,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             np.putmask(img, img > 255, 255)
             img = img.astype(np.uint8)
             if self.debug:
-                #cv2.imshow('Gamma', img)
                 self.update_gamma.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
-
-            # Otsu threshold
-            #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # For some reason img is not 8uc1 before, even though i cast to uint8 and cvt to gray initially???
-            #_, img = cv2.threshold(img, 0, 255, cv2.THRESH_OTSU)
-            #if self.debug:
-                #cv2.imshow('Threshold', img)
 
             # manual threshold
             _, img = cv2.threshold(img, self.threshold, 255, cv2.THRESH_BINARY)
@@ -259,29 +209,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.close_kernelsize)
             img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
             if self.debug:
-                #cv2.imshow('Threshold', img)
                 self.update_threshold.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
-
-            # Morphology
-            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.open_kernelsize)
-            # img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-            # if self.debug:
-            #     cv2.imshow('Morphology', img)
-
-            # # Keep only the well bottom region
-            # # By looking at region features
-            # # step 1: Keep only blobs that score above roundness threshold
-            # # step 2: Keep largest blob remaining after step 1
-            # largest_area_above_threshold = -1
-            # best_match = None
-            # im2, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            # for c in contours:
-            #     area = cv2.contourArea(c)
-            #     perimeter = cv2.arcLength(c, True)
-            #     metric = 4 * np.pi * area / perimeter ** 2
-            #     if metric > self.metric_threshold and area > largest_area_above_threshold:
-            #         largest_area_above_threshold = area
-            #         best_match = c
 
             # Select best match blob by looking at the mean score for
             # roundness and eccentricity, lower is better
@@ -299,30 +227,15 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 perimeter = cv2.arcLength(c, True)
                 roundness = 4 * np.pi * area / perimeter ** 2
 
-                # Calculate eccentricity from central moments as such:
-                # e = ((mu20 - mu02)^2 - 4*mu11^2)/(mu20+mu02)^2
-
-                # todo: eccentricity is supposed to be between 0 and 1, 0 being a perfect circle
-                # // same
-                # formula, different
-                # results? both in opencv and c?
-                #https: // books.google.nl / books?id = qUeecNvfn0oC & pg = PA522 & lpg = PA522 & dq = eccentricity + moments + range & source = bl & ots = IQ3ankJQYI & sig = ACfU3U2ZywI0Ed557Wi8xd65cPViCwniQA & hl = en & sa = X & ved = 2
-                #ahUKEwiQ_PaNxP3fAhVFJ1AKHVhdAVcQ6AEwC3oECAYQAQ  # v=onepage&q=eccentricity%20moments%20range&f=false
-                # // http: // breckon.eu / toby / teaching / dip / opencv / SimpleImageAnalysisbyMoments.pdf
-
-                # but for some reason it seems to be higher is better with random bounds? (but around -2...1 usually?)
                 m = cv2.moments(c)
                 eccentricity = ((m['nu20'] - m['nu02']) ** 2 + 4 * m['nu11'] ** 2) / (m['nu20'] + m['nu02']) ** 2
                 score = (1-roundness + eccentricity) / 2
-
-                #print("{} score {} roundness {} eccentricity {}".format(i, score, roundness, eccentricity))
 
                 if self.debug:
                     # Overlay scores on image in debug mode
                     cX = int(m["m10"] / m["m00"] + 0.5)
                     cY = int(m["m01"] / m["m00"] + 0.5)
                     cv2.putText(im3, '{0:.3f}'.format(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                    #cv2.imshow('Scores', im3)
                     self.update_scores.emit(cv2.resize(im3, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
                 if score < best_score:
@@ -332,23 +245,19 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # calculate centroid for best match blob
             offset = None
             if best_match is None:
-                self.centroid = None
                 if self.debug:
                     cv2.imshow('Result', original)
             else:
                 M = cv2.moments(best_match)
                 cX = int(M["m10"] / M["m00"] + 0.5)
                 cY = int(M["m01"] / M["m00"] + 0.5)
-                self.centroid = (cX, cY)
+                centroid = (cX, cY)
                 offset = tuple(np.subtract(self.centroid, target))
                 if self.debug:
                     # Overlay results on source image and display them
                     cv2.circle(original, target, 5, 0, 1)
-                    cv2.circle(original, self.centroid, 4, 0, 5)
-                    #cv2.imshow('Result', cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
+                    cv2.circle(original, centroid, 4, 0, 5)
                     self.update_result.emit(cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
-            if benchmarking:
-                self.debug = True
 
             return offset
 
