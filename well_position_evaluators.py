@@ -4,11 +4,13 @@ import numpy as np
 import wormvision
 import timeit
 import sys
+from PyQt5.QtCore import pyqtSignal, QObject
 
 
-class WellPositionEvaluator(ABC):
+class WellPositionEvaluator(QObject):
     @abstractmethod
     def __init__(self, debug):
+        super().__init__()
         self.centroid = None  # If a centroid is found in the evaluate function it can be stored here.
                               # The centroids are used during calibration to determine the target.
 
@@ -131,36 +133,42 @@ class HoughTransformEvaluator(WellPositionEvaluator):
 
 
 class WellBottomFeaturesEvaluator(WellPositionEvaluator):
+    update_blur = pyqtSignal(np.ndarray)
+    update_gamma = pyqtSignal(np.ndarray)
+    update_threshold = pyqtSignal(np.ndarray)
+    update_scores = pyqtSignal(np.ndarray)
+    update_result = pyqtSignal(np.ndarray)
+    
     def __init__(self, resolution, debug=False):
         super().__init__(debug)
         # Set up debug windows if debug mode is on
         self.debug = debug
         self.centroid = None
         self.img_width, self.img_height = resolution
-        if self.debug:
-            cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Blur', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Blur', 50, 100)
+        #if self.debug:
+            #cv2.namedWindow('Blur', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Blur', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
+            #cv2.moveWindow('Blur', 50, 100)
 
-            cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Gamma', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Gamma', 460, 100)
+            #cv2.namedWindow('Gamma', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Gamma', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
+            #cv2.moveWindow('Gamma', 460, 100)
 
-            cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Threshold', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Threshold', 870, 100)
+            #cv2.namedWindow('Threshold', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Threshold', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
+            #cv2.moveWindow('Threshold', 870, 100)
 
-            cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Scores', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Scores', 1280, 100)
+            #cv2.namedWindow('Scores', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Scores', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
+            #cv2.moveWindow('Scores', 1280, 100)
 
-            # cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
-            # cv2.resizeWindow('Morphology', self.img_width, self.img_height)
-            # cv2.moveWindow('Morphology', 1280, 100)
+            ## cv2.namedWindow('Morphology', cv2.WINDOW_NORMAL)
+            ## cv2.resizeWindow('Morphology', self.img_width, self.img_height)
+            ## cv2.moveWindow('Morphology', 1280, 100)
 
-            cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('Result', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
-            cv2.moveWindow('Result', 50, 500)
+            #cv2.namedWindow('Result', cv2.WINDOW_NORMAL)
+            #cv2.resizeWindow('Result', int(self.img_width/2+0.5), int(self.img_height/2+0.5))
+            #cv2.moveWindow('Result', 50, 500)
 
         # Evaluation function parameters, scaled by image width if needed
         # parameters were originally determined for resolution of 410x308
@@ -170,7 +178,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.blur_sigma = 1
 
         # manual threshold
-        self.threshold = 30
+        self.threshold = 20
 
         # gamma
         self.c = 0.5
@@ -201,9 +209,15 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # convert img to 1d list
             cols = img.shape[1]
             rows = img.shape[0]
-            data = list(img.flat)
-            return wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
+            data = tuple(img.flat)
+            data = target
+            print("before")
+            a = wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
                                             self.threshold, self.area_threshold)
+            print("after")
+            self.centroid = a
+            return a
+            
         else:
             if benchmarking:
                 self.debug = False # dont show live images when benchmarking
@@ -215,7 +229,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # Gaussian filter
             img = cv2.GaussianBlur(img, self.blur_kernelsize, self.blur_sigma)
             if self.debug:
-                cv2.imshow('Blur', img)
+                #cv2.imshow('Blur', img)
+                self.update_blur.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
             # Auto contrast
             _min = np.min(img)
@@ -232,7 +247,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             np.putmask(img, img > 255, 255)
             img = img.astype(np.uint8)
             if self.debug:
-                cv2.imshow('Gamma', img)
+                #cv2.imshow('Gamma', img)
+                self.update_gamma.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
             # Otsu threshold
             #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -247,7 +263,8 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.close_kernelsize)
             img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
             if self.debug:
-                cv2.imshow('Threshold', img)
+                #cv2.imshow('Threshold', img)
+                self.update_threshold.emit(cv2.resize(img, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
             # Morphology
             # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.open_kernelsize)
@@ -288,27 +305,29 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
 
                 # Calculate eccentricity from central moments as such:
                 # e = ((mu20 - mu02)^2 - 4*mu11^2)/(mu20+mu02)^2
-                m = cv2.moments(c)
+
                 # todo: eccentricity is supposed to be between 0 and 1, 0 being a perfect circle
                 # // same
                 # formula, different
                 # results? both in opencv and c?
-                # // https: // books.google.nl / books?id = qUeecNvfn0oC & pg = PA522 & lpg = PA522 & dq = eccentricity + moments + range & source = bl & ots = IQ3ankJQYI & sig = ACfU3U2ZywI0Ed557Wi8xd65cPViCwniQA & hl = en & sa = X & ved = 2
-                # ahUKEwiQ_PaNxP3fAhVFJ1AKHVhdAVcQ6AEwC3oECAYQAQ  # v=onepage&q=eccentricity%20moments%20range&f=false
+                #https: // books.google.nl / books?id = qUeecNvfn0oC & pg = PA522 & lpg = PA522 & dq = eccentricity + moments + range & source = bl & ots = IQ3ankJQYI & sig = ACfU3U2ZywI0Ed557Wi8xd65cPViCwniQA & hl = en & sa = X & ved = 2
+                #ahUKEwiQ_PaNxP3fAhVFJ1AKHVhdAVcQ6AEwC3oECAYQAQ  # v=onepage&q=eccentricity%20moments%20range&f=false
                 # // http: // breckon.eu / toby / teaching / dip / opencv / SimpleImageAnalysisbyMoments.pdf
 
                 # but for some reason it seems to be higher is better with random bounds? (but around -2...1 usually?)
-                eccentricity = ((m['nu20'] - m['nu02']) ** 2 - 4 * m['nu11'] ** 2) / (m['nu20'] + m['nu02']) ** 2
+                m = cv2.moments(c)
+                eccentricity = ((m['nu20'] - m['nu02']) ** 2 + 4 * m['nu11'] ** 2) / (m['nu20'] + m['nu02']) ** 2
                 score = (1-roundness + eccentricity) / 2
 
-                print("{} score {} roundness {} eccentricity {}".format(i, score, roundness, eccentricity))
+                #print("{} score {} roundness {} eccentricity {}".format(i, score, roundness, eccentricity))
 
                 if self.debug:
                     # Overlay scores on image in debug mode
                     cX = int(m["m10"] / m["m00"] + 0.5)
                     cY = int(m["m01"] / m["m00"] + 0.5)
                     cv2.putText(im3, '{0:.3f}'.format(score), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                    cv2.imshow('Scores', im3)
+                    #cv2.imshow('Scores', im3)
+                    self.update_scores.emit(cv2.resize(im3, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
 
                 if score < best_score:
                     best_score = score
@@ -330,10 +349,10 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                     # Overlay results on source image and display them
                     cv2.circle(original, target, 5, 0, 1)
                     cv2.circle(original, self.centroid, 4, 0, 5)
-                    cv2.imshow('Result', cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
+                    #cv2.imshow('Result', cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
+                    self.update_result.emit(cv2.resize(original, (int(self.img_width/2+0.5), int(self.img_height/2+0.5))))
             if benchmarking:
                 self.debug = True
-
 
             return offset
 
@@ -345,7 +364,7 @@ def test_wellbottomfeaturesevaluator():
         # Test WellBottomFeaturesEvaluator with a test image
         # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
         # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
-        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
         # benchmark opencv vs c
         runtimes_c = []
         runtimes_opencv = []
@@ -388,7 +407,7 @@ def test_wellbottomfeaturesevaluator():
         cv2.waitKey(0)
     else:
         # single run to compare c vs opencv result
-        # imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        #imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
         imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
 
         x = WellBottomFeaturesEvaluator((410, 308), True)
