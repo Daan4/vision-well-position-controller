@@ -1,4 +1,5 @@
-"""Run this file to start. 'python3 run.py'"""
+"""Run this file to start. 'python3 run.py'
+NOTE: the pigpio daemon should be running on the target: 'sudo pigpiod'"""
 from well_position_controller import WellPositionController
 from well_position_evaluators import WellBottomFeaturesEvaluator, HoughTransformEvaluator
 from camera import PiVideoStream
@@ -94,6 +95,7 @@ if __name__ == '__main__':
                                  motor_y,
                                  MM_PER_PIXEL,
                                  pio,
+                                 vs,
                                  e1,
                                  # e2,
                                  target_coordinates=target_coordinates,
