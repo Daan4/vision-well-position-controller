@@ -3,8 +3,7 @@ import csv
 import os
 from time import sleep
 from datetime import datetime
-from well_position_evaluators import WellBottomFeaturesEvaluator
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QThread, pyqtSlot
 import cv2
 from random import randint
 
@@ -15,17 +14,13 @@ class WellPositionController(QThread):
     1) Move to the next well coordinates using preset setpoints (feedforward)
     2) Take image
     3) Evaluate well position from image
-    4) Adjust well positioning if its wrong using a feedback control loop by repeating steps 2-4 until the image is scored as correct
+    4) Adjust well positioning if it's incorrect by using a feedback control loop repeating steps 2-4 until the image is scored as correct
 
-    This class supports multiple scoring algorithms that can be weighted differently
+    This class supports an arbitrary number of image evaluation algorithms that can be weighted differently
     """
-    sig_msg = pyqtSignal(str)
-    ready = pyqtSignal()
-    name = "WellPositionController"
-    data = None
-
-    def __init__(self, setpoints_csv, max_offset_mm, motor_x, motor_y, mm_per_pixel, pio, *evaluators,
-                 target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5, debug_mode_min_error_mm=0):
+    def __init__(self, setpoints_csv, max_offset_mm, motor_x, motor_y, mm_per_pixel, pio, vs, *evaluators,
+                 target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5,
+                 debug_mode_min_error_mm=0):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -33,13 +28,16 @@ class WellPositionController(QThread):
             motor_x: Motor object instance that controls x axis position
             motor_y: Motor object instance that controls y axis position
             mm_per_pixel: mm per pixel used to convert evaluator results (which are given in pixels)
-            pio: pigpio class
+            pio: pigpio instance
+            vs: PiVideoStream instance
             max_offset_mm: (x, y) tuple of maximum allowed error in mm. If the absolute offset is lower the position will be considered correct
             target_coordinates: (x, y) tuple of target coordinates in image (diaphragm center). These can also be determined by using the calibrate function.
             *evaluators: List of tuples, each tuple of the format (WellPositionEvaluator, score_weight)
             debug: If set to True a random error will be added to each setpoint. Max error in each direction given by DEBUG_MODE_MAX_ERROR
                    The control loop will also require user input every iteration so that image processing results may be inspected
             logging: Set to True to log data to csv file
+            debug_mode_max_error_mm: The maximum random error in mm while in debug mode
+            debug_mode_min_error_mm: The minimum random error in mm while in debug mode
         """
         super().__init__()
         self.setpoints_csv_filename = setpoints_csv
@@ -53,44 +51,54 @@ class WellPositionController(QThread):
         self.mm_per_pixel = mm_per_pixel
         self.camera_started = False
         self.request_new_image = False  # Used by get_new_image and img_update to update self.img with a new frame from the pivideostream class
-        self.img = None
+        self.img = None  # New image frames are stored here after calling self.get_new_image
         self.debug = debug
         self.logging = logging
         self.debug_mode_max_error_um = debug_mode_max_error_mm * 1000
         self.debug_mode_min_error_um = debug_mode_min_error_mm * 1000
-        if self.logging:
-            # Create logging csv and add header text
-            if not os.path.isdir('logs'):
-                os.mkdir('logs')
-            if not os.path.isdir('images'):
-                os.mkdir('images')
-            self.logfile = 'logs/{}_WellPositionControllerLog.csv'.format(datetime.now().strftime('%Y%m%d%H%M%S'))
-            with open(self.logfile, 'w') as f:
-                csv_writer = csv.writer(f, delimiter=',')
-                csv_headers = ['Timestamp', 'Target (pixel coordinates (x, y))', 'Setpoint (mm)']
-                for evaluator, weight in evaluators:
-                    csv_headers.append('{} (weight {}) offset x (pixels)'.format(evaluator.__class__.__name__, weight))
-                    csv_headers.append('{} (weight {}) offset y (pixels)'.format(evaluator.__class__.__name__, weight))
-                    csv_headers.append('{} (weight {}) offset x (mm)'.format(evaluator.__class__.__name__, weight))
-                    csv_headers.append('{} (weight {}) offset y (mm)'.format(evaluator.__class__.__name__, weight))
-                csv_headers.append('Total weighted offset (pixels)')
-                csv_headers.append('Total weighted offset (mm)')
-                csv_headers.append('Pass 1/Fail 0 (max offset in mm (x, y): {})'.format(self.max_offset_mm))
-                csv_writer.writerow(csv_headers)
+        # connect pivideostream frame emitter to the image update slot
+        vs.ready.connect(self.img_update)
 
-    def __del__(self):
-        self.wait()
+        if self.logging:
+            self.setup_log()
+
+    def setup_log(self):
+        # Create logging csv and add header text
+        if not os.path.isdir('logs'):
+            os.mkdir('logs')
+        if not os.path.isdir('images'):
+            os.mkdir('images')
+        self.logfile = 'logs/{}_WellPositionControllerLog.csv'.format(datetime.now().strftime('%Y%m%d%H%M%S'))
+        with open(self.logfile, 'w') as f:
+            csv_writer = csv.writer(f, delimiter=',')
+            csv_headers = ['Timestamp', 'Target (pixel coordinates (x, y))', 'Setpoint (mm)']
+            for evaluator, weight in self.evaluators:
+                csv_headers.append('{} (weight {}) offset x (pixels)'.format(evaluator.__class__.__name__, weight))
+                csv_headers.append('{} (weight {}) offset y (pixels)'.format(evaluator.__class__.__name__, weight))
+                csv_headers.append('{} (weight {}) offset x (mm)'.format(evaluator.__class__.__name__, weight))
+                csv_headers.append('{} (weight {}) offset y (mm)'.format(evaluator.__class__.__name__, weight))
+            csv_headers.append('Total weighted offset (pixels)')
+            csv_headers.append('Total weighted offset (mm)')
+            csv_headers.append('Pass 1/Fail 0 (max offset in mm (x, y): {})'.format(self.max_offset_mm))
+            csv_writer.writerow(csv_headers)
 
     def load_setpoints_from_csv(self, filename):
+        """Load setpoints from csv file, the setpoint format should be as generated by the script /setpoints/generate_setpoints.py
+
+        Args:
+            filename: setpoints csv file path
+
+        Returns: list of tuple(setpoint_x, setpoint_y), with setpoints assumed to be in mm
+
+        """
         self.setpoints_csv_filename = filename
         with open(filename) as f:
             reader = csv.reader(f)
             return [(int(float(row[0])), int(float(row[1]))) for row in reader]
 
     def calibrate(self):
-        """
-        Find the diaphragm center by analyzing an image without a well plate present.
-        Sets self.target to the newly calculated diaphragm center.
+        """Find the diaphragm center by analyzing an image without a well plate present.
+        Sets self.target to the newly calculated diaphragm centroid
         """
         # get new image
         while not self.get_new_image():  # get_new_image returns None when the camera is still starting up
@@ -129,7 +137,6 @@ class WellPositionController(QThread):
         offset = np.average(offsets, 0, weights)
         # convert offset to mm
         offset_mm = np.multiply(offset, self.mm_per_pixel)
-        #print("offset_mm: {}".format(offset_mm))
         if abs(offset_mm[0]) < self.max_offset_mm[0] and abs(offset_mm[1]) < self.max_offset_mm[1]:
             result = True
         else:
@@ -144,8 +151,7 @@ class WellPositionController(QThread):
                 csv_data.append(timestamp)  # Timestamp
                 csv_data.append(self.target)  # Target (pixel coordinates)
                 csv_data.append(setpoint)  # Setpoint (mm)
-                for i, evaluator in enumerate(self.evaluators):
-                    evaluator = evaluator[0]  # Evaluator is a tuple, we don't need the weights here
+                for i, in range(len(self.evaluators)):
                     # Write offset x and offset y in pixels and mm for each evaluator
                     csv_data.append(offsets[i][0])
                     csv_data.append(offsets[i][1])
@@ -158,7 +164,7 @@ class WellPositionController(QThread):
                 else:
                     csv_data.append(0)
                 csv_writer.writerow(csv_data)
-                # Save image
+                # Save image with the timestamp corresponding to the current row in the csv.
                 cv2.imwrite('images/{}.png'.format(timestamp), img)
 
         return result
@@ -166,7 +172,7 @@ class WellPositionController(QThread):
     @pyqtSlot(np.ndarray)
     def img_update(self, image=None):
         """ Store the latest image frame from PiVideoStream in self.img
-        Only update the image if it's not currently being analyzed
+        Only overwrite self.img if a new frame has been requested by calling get_new_image
 
         Args:
             image: bgr image matrix (opencv compatible)
@@ -182,10 +188,10 @@ class WellPositionController(QThread):
                 self.request_new_image = False
         except Exception as err:
             self.sig_msg.emit(self.name, ": exception in img_update " + str(err))
-            
+
     def get_new_image(self):
         if not self.camera_started:
-            # Return None if the camera is not yet started -> cannot obtain a new frame
+            # Return None if the camera is not yet started -> cannot obtain a new frame yet
             return None
         self.img = None
         # Request new image frame from PiVideoStream
@@ -196,7 +202,7 @@ class WellPositionController(QThread):
         return True  # Return True on success
 
     def move_motors(self, delta_x_mm, delta_y_mm):
-        """Move the well plate in two dimensions simultaneously.
+        """Move the well plate in two dimensions.
 
         Args:
             delta_x_mm: delta x given in mm, negative number moves counterclockwise
@@ -262,7 +268,7 @@ class WellPositionController(QThread):
                     random_error_x *= -1
                 if randint(0, 1) == 0:
                     random_error_y *= -1
-                
+
                 setpoint_x2 = setpoint_x + random_error_x
                 setpoint_y2 = setpoint_x + random_error_y
                 self.move_motors(setpoint_x2 - previous_setpoint_x,
@@ -271,7 +277,6 @@ class WellPositionController(QThread):
                 previous_setpoint_y = setpoint_y
                 setpoint_x = setpoint_x2
                 setpoint_y = setpoint_y2
-                
 
             total_error = [0, 0]  # Keep track of the total error so that we can save the new offset for the next run
             passed = False
@@ -284,9 +289,9 @@ class WellPositionController(QThread):
                 result = self.evaluate_position(self.img, (setpoint_x, setpoint_y))
                 if self.debug:
                     # Require user input in debug mode, so that results can be inspected
-                    
+
                     print("WPC DEBUG MODE: evaluation result = {}".format(result))
-                    #input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
+                    # input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
                     # continue with the next well
@@ -303,10 +308,11 @@ class WellPositionController(QThread):
         if not self.debug:
             with open(offsets_csv_path, 'w') as f:
                 f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
-                
+
         print("FINISHED")
-                
+
     def calibrate_mm_per_step_photos(self):
+        # Rough setup to generate mm_per_step calibration images
         while not self.get_new_image():  # get_new_image returns None when the camera is still starting up
             sleep(0.5)
         self.get_new_image()
@@ -317,35 +323,21 @@ class WellPositionController(QThread):
         cv2.imshow('image', self.img)
         cv2.imwrite('images/x_2.png', self.img)
         self.move_motors(2500, 0)
-        
-        #y
-        #while not self.get_new_image():
-            #sleep(0.5)
-        #self.get_new_image()
-        #cv2.imshow('image', self.img)
-        #cv2.imwrite('images/y_1.png', self.img)
-        #self.move_motors(0, -2200)
-        #self.get_new_image()
-        #cv2.imshow('image', self.img)
-        #cv2.imwrite('images/y_2.png', self.img)
-        #self.move_motors(0, 2200)
-            
-    def test(self):
-        self.move_motors(500, 0)
-        self.get_new_image()
-        cv2.imshow('image', self.img)
+
+        # y
+        # while not self.get_new_image():
+        # sleep(0.5)
+        # self.get_new_image()
+        # cv2.imshow('image', self.img)
+        # cv2.imwrite('images/y_1.png', self.img)
+        # self.move_motors(0, -2200)
+        # self.get_new_image()
+        # cv2.imshow('image', self.img)
+        # cv2.imwrite('images/y_2.png', self.img)
+        # self.move_motors(0, 2200)
 
     def run(self):
-        #self.test()
-        #self.calibrate_mm_per_step_photos()
         self.calibrate()
         print("calibrated target: {}".format(self.target))
         input("Press enter to continue")
         self.control_loop()
-
-
-if __name__ == '__main__':
-    setpoints_csv_file = "setpoints\\24.csv"
-    e = ((WellBottomFeaturesEvaluator(True), 1),)
-    wpc = WellPositionController(setpoints_csv_file, (16, 16), (WellBottomFeaturesEvaluator(True), 1), target_coordinates=(0, 0))
-    wpc.start()
