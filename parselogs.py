@@ -8,7 +8,7 @@ from datetime import datetime
 from ast import literal_eval
 import numpy as np
 from math import sqrt
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 TIMESTAMPFORMAT = '%Y%m%d%H%M%S'
 
@@ -31,8 +31,10 @@ class WPCLogParser():
             r = csv.reader(f, delimiter=',')
             self.log_rows = [row for row in r]
 
+        # Store header-row index mappings for common headers and evaluator headers
         self.parse_headers()
 
+        # Cast row data from string to their intended type
         self.parse_rows()
 
     def parse_headers(self):
@@ -139,13 +141,63 @@ class WPCLogParser():
                 current_setpoint_time = 0
         return np.average(all_setpoint_times)
 
-    def plot_errors(self, setpoint_indices=None):
+    def plot_errors(self, setpoint_indices=None, evaluator_names=None, filename=None, mm=False, colors=False):
         """Plot errors for each setpoint index passed in the parameters setpoint_indices.
         Leave setpoint_indices as None to plot error for each setpoint.
         The plots will show a dot for each location visited around a well.
         Displaying the setpoint index and iteration number.
-        The plot represents an image with the target in the center and (x, y) representing the pixel location in the image"""
-        pass
+        The plot represents an image with the target in the center and (x, y) representing the pixel location in the image.
+        Each setpoint is color coded
+
+        setpoint_indices: process only setpoints for setpoint INDICES (eg setpoint 0 is generally well A1) given in this list, or all setpoints if None
+        evaluator_names: process only evaluator output for evaluator NAMES given in this list, or all evaluators if None
+        filename: plot will be saved as filename if it's given
+        mm: set to true to plot errors in mm rather than pixels"""
+        x = []
+        y = []
+        setpoint_index = 0
+        if setpoint_indices is None:
+            setpoint_indices = range(len(self.log_rows))
+        if evaluator_names is None:
+            evaluator_names = self.eval_names
+        fig, ax = plt.subplots()
+        ax.set_title("Visualization of positioning error")
+        if mm:
+            ax.set(xlabel="x error [mm]", ylabel="y error [mm]")
+        else:
+            ax.set(xlabel="x error [px]", ylabel="y error [px]")
+
+        for row in self.log_rows:
+            curr_x = 0
+            curr_y = 0
+            if setpoint_index in setpoint_indices:
+                for eval_name in evaluator_names:
+                    if mm:
+                        eval_error_x = row[self.eval_col_map[eval_name][2]]
+                        eval_error_y = row[self.eval_col_map[eval_name][3]]
+                    else:
+                        eval_error_x = row[self.eval_col_map[eval_name][0]]
+                        eval_error_y = row[self.eval_col_map[eval_name][1]]
+                    weight = self.eval_col_map[eval_name][4]
+                    curr_x += eval_error_x * weight
+                    curr_y += eval_error_y * weight
+                x.append(curr_x)
+                y.append(curr_y)
+            if row[self.std_col_map[Headers.RESULT]]:
+                setpoint_index += 1
+                if colors:
+                    ax.scatter(x, y, s=75, edgecolor='none', alpha=0.5, label=str(setpoint_index))
+                    x = []
+                    y = []
+        # plot results
+        if not colors:
+            ax.scatter(x, y, s=75, edgecolor='none', alpha=0.5, label=str(setpoint_index))
+        ax.grid(True)
+
+        if filename is not None:
+            fig.savefig(filename)
+
+        plt.show()
 
 
 if __name__ == '__main__':
@@ -154,3 +206,4 @@ if __name__ == '__main__':
     print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
     print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
     print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
+    wlp.plot_errors(setpoint_indices=range(10), mm=True)
