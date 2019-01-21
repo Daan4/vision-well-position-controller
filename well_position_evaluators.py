@@ -209,15 +209,11 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
             # convert img to 1d list
             cols = img.shape[1]
             rows = img.shape[0]
-            data = tuple(img.flat)
-            data = target
-            print("before")
-            a = wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
+            data = list(img.flat)
+            offset = wormvision.WBFE_evaluate(data, cols, rows, target, self.blur_kernelsize[0], self.blur_sigma, self.c, self.gamma,
                                             self.threshold, self.area_threshold)
-            print("after")
-            self.centroid = a
-            return a
-            
+            self.centroid = offset
+            return offset
         else:
             if benchmarking:
                 self.debug = False # dont show live images when benchmarking
