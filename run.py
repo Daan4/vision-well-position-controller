@@ -6,6 +6,8 @@ import pigpio
 import sys
 from PyQt5.QtWidgets import QApplication
 import signal
+import time
+from qtui import MainWindow
 
 # define motor driver pins
 X_NEN_pin = 14
@@ -30,21 +32,21 @@ MM_PER_STEP = 0.005  # appears to be the same for x and y
 
 
 # mm per pixel
-MM_PER_PIXEL = 0.00254  # (depends on height?, this is for settings on 17/1/19), used image mm_per_pixel_test
-
+MM_PER_PIXEL = 0.0254  # (depends on height?, this is for settings on 17/1/19), used image mm_per_pixel_test
 
 # define camera settings
 RESOLUTION = (640, 480)  # width, height
 FRAME_RATE = 30
 USE_VIDEO_PORT = False
 
-
 # enable debug mode for controller and evaluators
-ENABLE_DEBUG_MODE = True
+ENABLE_DEBUG_MODE_EVALUATOR = False
+ENABLE_DEBUG_MODE_CONTROLLER = True
 # set max random error in debug mode (applied +- in both x and y direction)
-DEBUG_MODE_MAX_ERROR_MM = 2
+DEBUG_MODE_MAX_ERROR_MM = 2.5
+DEBUG_MODE_MIN_ERROR_MM = 0.5
 
-MAX_ALLOWED_ERROR_MM = (0.05, 0.05)
+MAX_ALLOWED_ERROR_MM = (0.2, 0.2)
 
 # enable logging data to csv file
 ENABLE_LOGGING = True
@@ -66,6 +68,9 @@ if __name__ == '__main__':
     # Set up QApplication
     app = QApplication(sys.argv)
     
+    # Set up gui
+    main_window = MainWindow()
+    
     # Set up camera video stream
     vs = PiVideoStream(resolution=RESOLUTION, framerate=FRAME_RATE, use_video_port=USE_VIDEO_PORT)
     print("starting pivideostream")
@@ -79,7 +84,7 @@ if __name__ == '__main__':
     # Set up well position controller and evaluators
     setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
-    e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
+    e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE_EVALUATOR), 1)
     #e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
     wpc = WellPositionController(setpoints_csv_file,
                                  MAX_ALLOWED_ERROR_MM,
@@ -90,16 +95,27 @@ if __name__ == '__main__':
                                  e1,
                                  # e2,
                                  target_coordinates=target_coordinates,
-                                 debug=ENABLE_DEBUG_MODE,
+                                 debug=ENABLE_DEBUG_MODE_CONTROLLER,
                                  logging=ENABLE_LOGGING,
-                                 debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM)
+                                 debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM,
+                                 debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM)
                                  
+    # todo move signal-slot connections to constructors
     # connect pivideostream frame emitter to update function in wpc
     vs.ready.connect(wpc.img_update)
+    
+    # connect evaluator emitters to update function in gui to display images using qt
+    e1[0].update_blur.connect(main_window.update_blur)
+    e1[0].update_gamma.connect(main_window.update_gamma)
+    e1[0].update_threshold.connect(main_window.update_threshold)
+    e1[0].update_scores.connect(main_window.update_scores)
+    e1[0].update_result.connect(main_window.update_result)
+    
 
     print("starting wpc")
     wpc.start()
     
     print("starting event loop")
     signal.signal(signal.SIGINT, catch_sigint)
+    main_window.show()
     app.exec_()
