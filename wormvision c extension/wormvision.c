@@ -14,8 +14,7 @@
 #define M_PI		3.14159265358979323846
 
 // Create an image_t struct from python arguments
-// Inputs: self -> WellBottomFeaturesEvaluator instance
-//         data -> 1d list with grayscale pixel values (8-bit) from LT to BR
+// Inputs: data -> 1d list with grayscale pixel values (8-bit) from LT to BR
 //         cols -> image col count
 //         rows -> image row count
 // Returns: pointer to image_t struct with given imgdata, cols and rows
@@ -25,12 +24,9 @@ image_t *newBasicImagePython(PyObject *data, int32_t cols, int32_t rows) {
 
     if(img == NULL) { return NULL; }
     // Parse data from python list to c array
-    // printf("data\n");
     for(int32_t i=0; i<rows*cols; i++) {
         img->data[i] = (basic_pixel_t) PyLong_AsLong(PyList_GetItem(data, i));
-        // printf("%d\n", img->data[i]);
     }
-    // printf("rows %d cols %d\n", rows, cols);
     return(img);
 }
 
@@ -45,9 +41,9 @@ image_t *newBasicImagePython(PyObject *data, int32_t cols, int32_t rows) {
 //         blur_sigma -> sigma for blur
 //         c -> constant for gamma operation
 //         gamma -> constant for gamma operation
-//         open_kernelsize -> morphology kernel size
-//         metric_threshold -> threshold for classification
-// Returns: Python tuple with (found offset, found centroid)
+//         threshold_param -> threshold value: pixels above this value are selected
+//         area_threshold -> blobs smaller than this area will be ignored during classification
+// Returns: Python tuple with (offset_x, offset_y)
 static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     PyObject *imgdata_list;
     int32_t imgrows;
@@ -57,8 +53,6 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     basic_pixel_t threshold_param;
     float c;
     float g;
-    //int32_t morphology_kernel_size;
-    //float metric_threshold;
     int32_t area_threshold;
 
     PyObject *target_tuple;
@@ -74,30 +68,13 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
 
     if(src == NULL) { return NULL; }
     // Parse data from python list to c array
-    // printf("data\n");
     for(int32_t i=0; i<imgrows*imgcols; i++) {
         src->data[i] = (basic_pixel_t) PyLong_AsLong(PyList_GetItem(imgdata_list, i));
-        // printf("%d\n", img->data[i]);
     }
-    // printf("rows %d cols %d\n", rows, cols);
+
     // Parse target from python tuple to array
     target[0] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 0));
     target[1] = (int32_t) PyLong_AsLong(PyTuple_GetItem(target_tuple, 1));
-
-    // uncomment to print arguments for testing
-//    printf("target %d, %d\n", target[0], target[1]);
-//    printf("blurkernelsize %d\n", kernel_size);
-//    printf("sigma %f\n", sigma);
-//    printf("c %f\n", c);
-//    printf("g %f\n", g);
-//    printf("morphkernelsize %d\n", morphology_kernel_size);
-//    printf("metric_threshold %f\n", metric_threshold);
-//    printf("area_threshold %d\n", area_threshold);
-//    printf("threshold_param %d\n", threshold_param);
-
-
-
-    //image_t *dst = newBasicImage(src->cols, src->rows);
 
     // 1. Gaussian blur
     gaussianBlur(src, src, kernel_size, sigma);
@@ -109,55 +86,13 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
     gamma_evdk(src, src, c, g);
 
     // 4. Threshold
-    //thresholdOtsu(src, src, BRIGHT);
     threshold(src, src, 0, threshold_param);
     invert(src, src);
 
-    // fill holes
+    // 5. fill holes
     fillHoles(src, src, EIGHT);
 
-    // 5. Morphology
-    // first generate 49x49 ellipse (ish?) kernel. note: not quite the same as opencv kernel yet
-//    int32_t radius = (int32_t) (morphology_kernel_size / 2.0f + 0.5);
-//    image_t *kernel = newBasicImage(2*radius-1, 2*radius-1);
-//    kernel->view = IMGVIEW_BINARY;
-//    uint32_t i = (2*radius-1) * (2*radius-1);
-//    int32_t row = 0;
-//    int32_t col = 0;
-//    basic_pixel_t *k = (basic_pixel_t *) kernel->data;
-//    while(i-- > 0) {
-//        if((int32_t) (sqrt((row-radius+1)*(row-radius+1) + (col-radius+1)*(col-radius+1)) + 0.5) < radius) {
-//            *k++ = 1;
-//        } else {
-//            *k++ = 0;
-//        }
-//        if(++col == kernel->cols) {
-//            col = 0;
-//            row++;
-//        }
-//    }
-//    morph_open(src, dst, kernel);
-
     // 6. Labelling, feature extraction, classification to select correct blob
-//    uint32_t blob_count;
-//    blob_count = labelBlobs(dst, dst, EIGHT);
-//    float metric;
-//    int32_t largest_area_above_threshold = -1;
-//    int8_t best_match = -1;
-//    blobinfo_t info;
-//    for(i = 1; i <= blob_count; i++) {
-//        blobAnalyse(dst, i, &info);
-//        metric = 4 * M_PI * info.nof_pixels / (info.perimeter * info.perimeter);
-//        if(metric > metric_threshold && info.nof_pixels > largest_area_above_threshold) {
-//            largest_area_above_threshold = info.nof_pixels;
-//            best_match = i;
-//        }
-//    }
-//    if(best_match == -1) {
-//        // no valid blob found
-//        // return None
-//        Py_RETURN_NONE;
-//    }
     int8_t best_match = -1;
     float best_score = 1000.0f;
     float roundness_metric, eccentricity_metric, score;
@@ -194,8 +129,6 @@ static PyObject *WBFE_evaluate(PyObject *self, PyObject *args) {
 
     // Cleanup
     deleteImage(src);
-    //deleteImage(dst);
-    //deleteImage(kernel);
 
     // Return tuple (offset_x, offset_y)
     PyObject *offset_tuple = PyTuple_New(2);
