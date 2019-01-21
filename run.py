@@ -1,3 +1,4 @@
+"""Run this file to start. 'python3 run.py'"""
 from well_position_controller import WellPositionController
 from well_position_evaluators import WellBottomFeaturesEvaluator, HoughTransformEvaluator
 from camera import PiVideoStream
@@ -6,7 +7,6 @@ import pigpio
 import sys
 from PyQt5.QtWidgets import QApplication
 import signal
-import time
 from qtui import MainWindow
 
 # define motor driver pins
@@ -51,12 +51,15 @@ MAX_ALLOWED_ERROR_MM = (0.2, 0.2)
 # enable logging data to csv file
 ENABLE_LOGGING = True
 
-
+# global reference to motor classes, to stop them after a sigint
 motor_x = None
 motor_y = None
 
 
 def catch_sigint(sig, frame):
+    # this function handles sigints to stop the motors
+    # todo: sometimes this will fail to actually stop the motor.
+    # capture and investigate the exception that pops up in the terminal when this happens
     print("stopping motors and quitting")
     motor_x.stop()
     motor_y.stop()
@@ -67,15 +70,14 @@ def catch_sigint(sig, frame):
 if __name__ == '__main__':
     # Set up QApplication
     app = QApplication(sys.argv)
-    
+
     # Set up gui
     main_window = MainWindow()
-    
+
     # Set up camera video stream
     vs = PiVideoStream(resolution=RESOLUTION, framerate=FRAME_RATE, use_video_port=USE_VIDEO_PORT)
-    print("starting pivideostream")
     vs.start()
-    
+
     # Set up Stepper motor driver
     pio = pigpio.pi()
     motor_x = Stepper(pio, MM_PER_STEP, NEN_pin=X_NEN_pin, DIR_pin=X_DIR_pin, STP_pin=X_STP_pin)
@@ -85,7 +87,7 @@ if __name__ == '__main__':
     setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
     e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE_EVALUATOR), 1)
-    #e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
+    # e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
     wpc = WellPositionController(setpoints_csv_file,
                                  MAX_ALLOWED_ERROR_MM,
                                  motor_x,
@@ -99,23 +101,23 @@ if __name__ == '__main__':
                                  logging=ENABLE_LOGGING,
                                  debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM,
                                  debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM)
-                                 
-    # todo move signal-slot connections to constructors
+
+    # Connect qt signals and slots
     # connect pivideostream frame emitter to update function in wpc
     vs.ready.connect(wpc.img_update)
-    
+
     # connect evaluator emitters to update function in gui to display images using qt
     e1[0].update_blur.connect(main_window.update_blur)
     e1[0].update_gamma.connect(main_window.update_gamma)
     e1[0].update_threshold.connect(main_window.update_threshold)
     e1[0].update_scores.connect(main_window.update_scores)
     e1[0].update_result.connect(main_window.update_result)
-    
 
-    print("starting wpc")
     wpc.start()
-    
-    print("starting event loop")
+
+    # Set up a sigint handler function
     signal.signal(signal.SIGINT, catch_sigint)
+
     main_window.show()
+    print("starting event loop")
     app.exec_()
