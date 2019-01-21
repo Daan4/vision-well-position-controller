@@ -21,6 +21,7 @@ setup(
 # replace #warning by // #warning
 #
 
-# build (from outside venv) with python setup.py build
-# install (from within venv) with python setup.py install
+# build (from outside venv) with "python setup.py build" in this folder
+# install (from within venv) with "python setup.py install" in this folder
 # visual studio build tools need to be installed and cl.exe added to the system path
+# on raspberry pi: "sudo python3 setup.py install" in this folder
