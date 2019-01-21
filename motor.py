@@ -114,7 +114,7 @@ class Stepper(QObject):
             self.pio.set_PWM_frequency(self.STP_pin, 1000)
             self.pio.set_PWM_dutycycle(self.STP_pin, 128) # PWM 3/4 on
             
-            while self.cbc.tally() < steps - 10:
+            while int(self.cbc.tally()/2+0.5) < steps - 10:
                 time.sleep(0.001)
                 
             self.stop()
