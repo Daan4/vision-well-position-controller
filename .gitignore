@@ -2,3 +2,4 @@
 /.idea/
 /wormvision c extension/*/
 /logs/
+*.zip
