@@ -144,7 +144,7 @@ class WPCLogParser():
                 current_setpoint_time = 0
         return np.average(all_setpoint_times)
 
-    def plot_errors(self, setpoint_indices=None, evaluator_names=None, filename=None, mm=False, colors=False):
+    def plot_errors(self, setpoint_indices=None, evaluator_names=None, _filename=None, mm=False, colors=False):
         """Plot errors for each setpoint index passed in the parameters setpoint_indices.
         Leave setpoint_indices as None to plot error for each setpoint.
         The plots will show a dot for each location visited around a well.
@@ -197,8 +197,8 @@ class WPCLogParser():
             ax.scatter(x, y, s=75, edgecolor='none', alpha=0.5, label=str(setpoint_index))
         ax.grid(True)
 
-        if filename is not None:
-            fig.savefig(filename)
+        if _filename is not None:
+            fig.savefig(_filename)
 
         plt.show()
         
@@ -239,12 +239,12 @@ def generate_gif(image_dir, output_filename, fps=0.2):
 
 if __name__ == '__main__':
     #filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
-    #filename = 'logs/48x well plate with offsets.csv'
-    filename = 'logs/48x well plate without offsets.csv'
+    filename = 'logs/48x well plate with offsets.csv'
+    #filename = 'logs/48x well plate without offsets.csv'
     wlp = WPCLogParser(filename)
-    #print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
-    #print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
-    #print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
+    print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
+    print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
+    print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
     #wlp.rename_correct_images('48x w o offsets')
-    #wlp.plot_errors(mm=True, colors=True)
-    generate_gif('images/48x w offsets/', 'images/48x w o offsets/48x w offsets.gif')
+    wlp.plot_errors(mm=True, _filename='out2.png')
+    #generate_gif('images/48x w offsets/', 'images/48x w o offsets/48x w offsets.gif')
