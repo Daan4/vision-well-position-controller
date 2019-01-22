@@ -18,8 +18,9 @@ def generate_setpoints(filename, initial_offset_y, initial_offset_x, offset_x, o
         for y in range(rows):
             lines_buffer = []
             for x in range(columns):
-                setpoint_x = round(initial_offset_x + x * offset_x, 2)
-                setpoint_y = round(initial_offset_y + y * offset_y, 2)
+                # Invert setpoints to work with current hardware setup
+                setpoint_x = -round(initial_offset_x + x * offset_x, 2)
+                setpoint_y = -round(initial_offset_y + y * offset_y, 2)
                 lines_buffer.append("{}, {}\n".format(setpoint_x, setpoint_y))
             if y % 2 != 0:
                 lines_buffer.reverse()
@@ -32,4 +33,7 @@ if __name__ == '__main__':
     # generate_setpoints("setpoints\\24.csv", 13.49, 15.13, 19.5, 19.5, 4, 6)
 
     # settings for 24 well plate, assuming that we start on well A1
-    generate_setpoints("24.csv", 0, 0, 19.5, 19.5, 4, 6)
+    #generate_setpoints("24.csv", 0, 0, 19.5, 19.5, 4, 6)
+
+    # settings for 48 well plate, assuming that we start on well A1
+    generate_setpoints("48.csv", 0, 0, 13, 13, 6, 8)
