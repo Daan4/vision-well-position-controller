@@ -153,7 +153,6 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         # morphology
         self.open_kernelsize = (10, 10)  # Has to be a square (for c implementation)
         self.close_kernelsize = (10, 10)
-
         # classification
         self.area_threshold = 5000
 
@@ -252,7 +251,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
                 cX = int(M["m10"] / M["m00"] + 0.5)
                 cY = int(M["m01"] / M["m00"] + 0.5)
                 centroid = (cX, cY)
-                offset = tuple(np.subtract(self.centroid, target))
+                offset = tuple(np.subtract(centroid, target))
                 if self.debug:
                     # Overlay results on source image and display them
                     cv2.circle(original, target, 5, 0, 1)
@@ -312,15 +311,15 @@ def test_wellbottomfeaturesevaluator():
         cv2.waitKey(0)
     else:
         # single run to compare c vs opencv result
-        #imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
-        imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
+        #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
 
         x = WellBottomFeaturesEvaluator((410, 308), True)
         img = cv2.imread(imgpath, cv2.CV_8UC1)
-        print('opencv: {}'.format(x.evaluate(img, (227, 144), False)))
+        print('opencv: {}'.format(x.evaluate(img, (227, 144))))
 
         x.debug = False
-        print('c: {}'.format(x.evaluate(img, (227, 144), False)))
+        print('c: {}'.format(x.evaluate(img, (227, 144))))
         cv2.waitKey(0)
         # x.debug = False
         # print('c: {}'.format(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), False)))
