@@ -11,6 +11,7 @@ from math import sqrt
 import matplotlib.pyplot as plt
 import shutil
 import os
+import imageio
 
 TIMESTAMPFORMAT = '%Y%m%d%H%M%S'
 
@@ -225,9 +226,15 @@ class WPCLogParser():
                     print("file for well index {} not found: {}".format(well_counter, input_filename))
                 well_counter += 1
 
-    def generate_gif(self, image_dir, fps=0.2):
-        """Used to convert the images outputted by rename_correct_image to a gif"""
-        pass
+
+def generate_gif(image_dir, output_filename, fps=0.2):
+    """Used to convert the images outputted by rename_correct_image to a gif"""
+    images = []
+    for filename in os.listdir(image_dir):
+        if filename.endswith('.png'):
+            filepath = os.path.join(image_dir, filename)
+            images.append(imageio.imread(filepath))
+    imageio.mimsave(output_filename, images)
 
 
 if __name__ == '__main__':
@@ -238,5 +245,6 @@ if __name__ == '__main__':
     #print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
     #print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
     #print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
-    wlp.rename_correct_images('48x w o offsets')
+    #wlp.rename_correct_images('48x w o offsets')
     #wlp.plot_errors(mm=True, colors=True)
+    generate_gif('images/48x w offsets/', 'images/48x w o offsets/48x w offsets.gif')
