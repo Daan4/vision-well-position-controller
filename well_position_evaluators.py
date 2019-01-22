@@ -269,6 +269,7 @@ def test_wellbottomfeaturesevaluator():
         # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_2_downscaled.png'
         # imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\test set 1\\downscaled\\1_6_downscaled.png'
         #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
+        imgpath = 'D:\\Libraries\\Documents\\pycharmprojects\\well-position-controller\\images\\test1.png'
         # benchmark opencv vs c
         runtimes_c = []
         runtimes_opencv = []
@@ -284,7 +285,7 @@ def test_wellbottomfeaturesevaluator():
         x.debug = True
         for _ in range(10):
             start = timeit.default_timer()
-            print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144), True))
+            print(x.evaluate(cv2.imread(imgpath, cv2.CV_8UC1), (227, 144)))
             stop = timeit.default_timer()
             print('Time opencv ({}): {}'.format(_+1, stop-start))
             runtimes_opencv.append(stop - start)
@@ -311,9 +312,9 @@ def test_wellbottomfeaturesevaluator():
         cv2.waitKey(0)
     else:
         # single run to compare c vs opencv result
-        imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
+        #imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
         #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
-
+        imgpath = 'D:\\Libraries\\Documents\\pycharmprojects\\well-position-controller\\images\\test32.png'
         x = WellBottomFeaturesEvaluator((410, 308), True)
         img = cv2.imread(imgpath, cv2.CV_8UC1)
         print('opencv: {}'.format(x.evaluate(img, (227, 144))))
