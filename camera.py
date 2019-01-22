@@ -6,6 +6,8 @@ import time
 
 
 class PiVideoStream(QThread):
+    sig_msg = pyqtSignal(str)  # logging message signal
+    ready = pyqtSignal(np.ndarray)  # image signal as numpy array
     def __init__(self, resolution=(640, 480), framerate=24, imgformat='bgr', effect='none', use_video_port=False):
         """
 
@@ -22,8 +24,6 @@ class PiVideoStream(QThread):
         self.rawCapture = None
         self.stream = None
         self.init_camera(resolution, framerate, imgformat, effect, use_video_port)
-        self.sig_msg = pyqtSignal(str)  # logging message signal
-        self.ready = pyqtSignal(np.ndarray)  # Image signal as numpy array
         self.pause = False
         self.sig_msg.emit(self.__class__.__name__ + ": opened.")
 

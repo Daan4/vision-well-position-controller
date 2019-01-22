@@ -10,6 +10,7 @@ class Stepper(QObject):
     # implement MS_pins
     # do something with the limit switch: interrupt + call-back
     # make homing function
+    sig_msg = pyqtSignal(str)  # message signal
     def __init__(self, pio, mm_per_step, NEN_pin=14, DIR_pin=15, STP_pin=18, LIM_pin=0, MS_pins=(1, 2, 3), motor_type="A4988"):
         """
 
@@ -44,7 +45,6 @@ class Stepper(QObject):
             self.STP_pin)  # to create a simple "callback counter" on the pin where the PWM pulses are sent
         self.running = False
         self.motor_type = motor_type
-        self.sig_msg = pyqtSignal(str)  # Message signal
 
     @pyqtSlot(float)
     def go(self, clockwise=False, steptype="Full"):
