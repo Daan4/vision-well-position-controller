@@ -1,0 +1,16 @@
+cycler==0.10.0
+imageio==2.4.1
+kiwisolver==1.0.1
+matplotlib==3.0.2
+numpy==1.15.4+mkl
+opencv-python==3.4.3
+Pillow==5.4.1
+pyparsing==2.3.1
+PyQt5==5.11.3
+PyQt5-sip==4.19.13
+python-dateutil==2.7.5
+six==1.12.0
+wormvision==1.0
+# these are rpi library requirements, exact versions required unknown as of creating this file
+pigpio
+picamera
