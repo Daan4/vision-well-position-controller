@@ -41,8 +41,8 @@ FRAME_RATE = 30
 USE_VIDEO_PORT = False
 
 # enable debug mode for controller and evaluators
-ENABLE_DEBUG_MODE_EVALUATOR = False
-ENABLE_DEBUG_MODE_CONTROLLER = True
+ENABLE_DEBUG_MODE_EVALUATOR = True
+ENABLE_DEBUG_MODE_CONTROLLER = False
 # set max random error in debug mode (applied +- in both x and y direction)
 DEBUG_MODE_MAX_ERROR_MM = 2.5
 DEBUG_MODE_MIN_ERROR_MM = 0.5
@@ -55,6 +55,9 @@ ENABLE_LOGGING = True
 # global reference to motor classes, to stop them after a sigint
 motor_x = None
 motor_y = None
+
+# SETPOINTS_FILE = "setpoints/debug_mode_test.csv"
+SETPOINTS_FILE = "setpoints/48.csv"
 
 
 def catch_sigint(sig, frame):
@@ -85,11 +88,10 @@ if __name__ == '__main__':
     motor_y = Stepper(pio, MM_PER_STEP, NEN_pin=Y_NEN_pin, DIR_pin=Y_DIR_pin, STP_pin=Y_STP_pin)
 
     # Set up well position controller and evaluators
-    setpoints_csv_file = "setpoints/debug_mode_test.csv"
     target_coordinates = (0, 0)  # to be determined
     e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE_EVALUATOR), 1)
     # e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
-    wpc = WellPositionController(setpoints_csv_file,
+    wpc = WellPositionController(SETPOINTS_FILE,
                                  MAX_ALLOWED_ERROR_MM,
                                  motor_x,
                                  motor_y,
