@@ -201,11 +201,15 @@ class WPCLogParser():
 
         plt.show()
         
-    def rename_correct_images(self):
+    def rename_correct_images(self, foldername=None):
         """Make a copy of correct images in /images/ named by well 
         by comparing the image timestamp to the log timestamp"""
         well_counter = 1
-        foldername = None
+
+        if foldername:
+            if not os.path.isdir('images/{}'.format(foldername)):
+                os.mkdir('images/{}'.format(foldername))
+
         for row in self.log_rows:
             if row[self.std_col_map[Headers.RESULT]]:
                 timestampstring = row[self.std_col_map[Headers.TIMESTAMP]].strftime(TIMESTAMPFORMAT)
@@ -214,19 +218,25 @@ class WPCLogParser():
                     if not os.path.isdir('images/{}'.format(foldername)):
                         os.mkdir('images/{}'.format(foldername))
                 try:
-                    shutil.copy('images/{}.png'.format(timestampstring), 'images/{}/{}.png'.format(foldername, well_counter))
-                except IOError as e:
-                    print("file for well index {} not found: {}".format(well_counter, timestampstring))
+                    input_filename = 'images/{}.png'.format(timestampstring)
+                    output_filename = 'images/{}/{}.png'.format(foldername, well_counter)
+                    shutil.copy(input_filename, output_filename)
+                except IOError as _:
+                    print("file for well index {} not found: {}".format(well_counter, input_filename))
                 well_counter += 1
+
+    def generate_gif(self, image_dir, fps=0.2):
+        """Used to convert the images outputted by rename_correct_image to a gif"""
+        pass
 
 
 if __name__ == '__main__':
     #filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
-    #filename = 'logs/20190122131821_WellPositionControllerLog.csv'
-    filename = 'logs/20190122135540_WellPositionControllerLog.csv'
+    #filename = 'logs/48x well plate with offsets.csv'
+    filename = 'logs/48x well plate without offsets.csv'
     wlp = WPCLogParser(filename)
-    print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
-    print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
-    print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
-    #wlp.rename_correct_images()
-    wlp.plot_errors(mm=True, colors=True)
+    #print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
+    #print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
+    #print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
+    wlp.rename_correct_images('48x w o offsets')
+    #wlp.plot_errors(mm=True, colors=True)
