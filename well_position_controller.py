@@ -3,7 +3,7 @@ import csv
 import os
 from time import sleep
 from datetime import datetime
-from PyQt5.QtCore import QThread, pyqtSlot
+from PyQt5.QtCore import QThread, pyqtSlot, pyqtSignal
 import cv2
 from random import randint
 
@@ -18,6 +18,8 @@ class WellPositionController(QThread):
 
     This class supports an arbitrary number of image evaluation algorithms that can be weighted differently
     """
+    sig_msg = pyqtSignal(str)
+    
     def __init__(self, setpoints_csv, max_offset_mm, motor_x, motor_y, mm_per_pixel, pio, vs, *evaluators,
                  target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5,
                  debug_mode_min_error_mm=0):
@@ -150,7 +152,7 @@ class WellPositionController(QThread):
                 csv_data.append(timestamp)  # Timestamp
                 csv_data.append(self.target)  # Target (pixel coordinates)
                 csv_data.append(setpoint)  # Setpoint (mm)
-                for i, in range(len(self.evaluators)):
+                for i in range(len(self.evaluators)):
                     # Write offset x and offset y in pixels and mm for each evaluator
                     csv_data.append(offsets[i][0])
                     csv_data.append(offsets[i][1])
@@ -179,14 +181,14 @@ class WellPositionController(QThread):
         self.camera_started = True
         try:
             if not self.request_new_image:
-                self.sig_msg.emit(self.name + ": no new image needed, frame dropped.")
+                self.sig_msg.emit(self.__class__.__name__ + ": no new image needed, frame dropped.")
             else:
                 self.img = image.copy()
                 # convert to grayscale
                 self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
                 self.request_new_image = False
         except Exception as err:
-            self.sig_msg.emit(self.name, ": exception in img_update " + str(err))
+            self.sig_msg.emit(self.__class__.__name__, ": exception in img_update " + str(err))
 
     def get_new_image(self):
         if not self.camera_started:
@@ -233,7 +235,7 @@ class WellPositionController(QThread):
         try:
             with open(offsets_csv_path, 'r') as f:
                 reader = csv.reader(f)
-                setpoint_offsets = [(int(float(row[0])), int(float(row[1]))) for row in reader]
+                setpoint_offsets = [(float(row[0]), float(row[1])) for row in reader]
             modified_setpoints = np.add(self.setpoints, setpoint_offsets)
         except FileNotFoundError as ex:
             # initialise setpoints offsets csv file with all zeroes
@@ -243,7 +245,6 @@ class WellPositionController(QThread):
                     f.write("0, 0\n")
                     setpoint_offsets.append(0)
             modified_setpoints = self.setpoints
-
         new_offsets = []
         # Todo: this assumes the well plate position starts @ 0,0 : ie a corner of the well plate is in frame
         # Todo: the initial previous setpoint probably needs to be set to some known initial offset
@@ -255,7 +256,9 @@ class WellPositionController(QThread):
             setpoint_x, setpoint_y = setpoint
             # feed forward to the setpoint coordinates
             if not self.debug:
-                self.move_motors(setpoint_x - previous_setpoint_x, setpoint_y - previous_setpoint_y)
+                # for some reason we move twice as far as required? halve setpoint for now
+                self.move_motors((setpoint_x - previous_setpoint_x)/2, (setpoint_y - previous_setpoint_y)/2)
+                print("current setpoint x, y {}, {}" .format(setpoint_x, setpoint_y))
                 previous_setpoint_x = setpoint_x
                 previous_setpoint_y = setpoint_y
             else:
@@ -286,11 +289,6 @@ class WellPositionController(QThread):
                     sleep(0.1)
                 # evaluate image
                 result = self.evaluate_position(self.img, (setpoint_x, setpoint_y))
-                if self.debug:
-                    # Require user input in debug mode, so that results can be inspected
-
-                    print("WPC DEBUG MODE: evaluation result = {}".format(result))
-                    # input("WPC DEBUG MODE: PRESS ENTER TO CONTINUE WITH NEXT ITERATION\n")
                 if result is True:
                     # the position is correct -> continue by taking a final full resolution picture for analysis and
                     # continue with the next well
@@ -306,7 +304,7 @@ class WellPositionController(QThread):
         # write new offsets to _offsets.csv file (unless in debug mode)
         if not self.debug:
             with open(offsets_csv_path, 'w') as f:
-                f.writelines(["{}, {}".format(x[0], x[1]) for x in new_offsets])
+                f.writelines(["{:.3f}, {:.3f}\n".format(x[0], x[1]) for x in new_offsets])
 
         print("FINISHED")
 
