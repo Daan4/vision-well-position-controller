@@ -3,3 +3,10 @@
 /wormvision c extension/*/
 /logs/
 *.zip
+
+/images/
+!/images/mm_per_pixel_test.png
+!/images/x_1.png
+!/images/x_2.png
+!/images/y_1.png
+!/images/y_2.png
