@@ -9,6 +9,8 @@ from ast import literal_eval
 import numpy as np
 from math import sqrt
 import matplotlib.pyplot as plt
+import shutil
+import os
 
 TIMESTAMPFORMAT = '%Y%m%d%H%M%S'
 
@@ -198,12 +200,33 @@ class WPCLogParser():
             fig.savefig(filename)
 
         plt.show()
+        
+    def rename_correct_images(self):
+        """Make a copy of correct images in /images/ named by well 
+        by comparing the image timestamp to the log timestamp"""
+        well_counter = 1
+        foldername = None
+        for row in self.log_rows:
+            if row[self.std_col_map[Headers.RESULT]]:
+                timestampstring = row[self.std_col_map[Headers.TIMESTAMP]].strftime(TIMESTAMPFORMAT)
+                if foldername is None:
+                    foldername = timestampstring
+                    if not os.path.isdir('images/{}'.format(foldername)):
+                        os.mkdir('images/{}'.format(foldername))
+                try:
+                    shutil.copy('images/{}.png'.format(timestampstring), 'images/{}/{}.png'.format(foldername, well_counter))
+                except IOError as e:
+                    print("file for well index {} not found: {}".format(well_counter, timestampstring))
+                well_counter += 1
 
 
 if __name__ == '__main__':
-    filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
+    #filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
+    #filename = 'logs/20190122131821_WellPositionControllerLog.csv'
+    filename = 'logs/20190122135540_WellPositionControllerLog.csv'
     wlp = WPCLogParser(filename)
     print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
     print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
     print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
-    wlp.plot_errors(setpoint_indices=range(10), mm=True)
+    #wlp.rename_correct_images()
+    wlp.plot_errors(mm=True, colors=True)
