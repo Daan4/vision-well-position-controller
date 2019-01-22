@@ -52,6 +52,9 @@ MAX_ALLOWED_ERROR_MM = (0.2, 0.2)
 # enable logging data to csv file
 ENABLE_LOGGING = True
 
+# enables using _offsets setpoint files
+ENABLE_OFFSETS = False
+
 # global reference to motor classes, to stop them after a sigint
 motor_x = None
 motor_y = None
@@ -104,7 +107,8 @@ if __name__ == '__main__':
                                  debug=ENABLE_DEBUG_MODE_CONTROLLER,
                                  logging=ENABLE_LOGGING,
                                  debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM,
-                                 debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM)
+                                 debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM,
+                                 enable_offsets = ENABLE_OFFSETS)
 
     # Connect qt signals and slots for displaying images
     # connect evaluator emitters to update function in gui to display images using qt

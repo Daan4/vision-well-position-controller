@@ -22,7 +22,7 @@ class WellPositionController(QThread):
     
     def __init__(self, setpoints_csv, max_offset_mm, motor_x, motor_y, mm_per_pixel, pio, vs, *evaluators,
                  target_coordinates=None, debug=False, logging=False, debug_mode_max_error_mm=5,
-                 debug_mode_min_error_mm=0):
+                 debug_mode_min_error_mm=0, enable_offsets=True):
         """
         Args:
             setpoints_csv: csv file path that contains one x,y setpoint per column.
@@ -40,6 +40,7 @@ class WellPositionController(QThread):
             logging: Set to True to log data to csv file
             debug_mode_max_error_mm: The maximum random error in mm while in debug mode
             debug_mode_min_error_mm: The minimum random error in mm while in debug mode
+            enable_offsets: Enable/disable reading from a _offsets.csv file to adjust setpoints pre emptively.
         """
         super().__init__()
         self.setpoints_csv_filename = setpoints_csv
@@ -58,6 +59,7 @@ class WellPositionController(QThread):
         self.logging = logging
         self.debug_mode_max_error_um = debug_mode_max_error_mm * 1000
         self.debug_mode_min_error_um = debug_mode_min_error_mm * 1000
+        self.enable_offsets = enable_offsets
         # connect pivideostream frame emitter to the image update slot
         vs.ready.connect(self.img_update)
 
@@ -232,19 +234,22 @@ class WellPositionController(QThread):
 
         # If setpoint correction offsets are available to load from previous runs, load them now and apply it to the setpoints
         offsets_csv_path = os.path.splitext(self.setpoints_csv_filename)[0] + "_offsets.csv"
-        try:
-            with open(offsets_csv_path, 'r') as f:
-                reader = csv.reader(f)
-                setpoint_offsets = [(float(row[0]), float(row[1])) for row in reader]
-            modified_setpoints = np.add(self.setpoints, setpoint_offsets)
-        except FileNotFoundError as ex:
-            # initialise setpoints offsets csv file with all zeroes
-            with open(offsets_csv_path, 'w') as f:
-                setpoint_offsets = []
-                for _ in range(len(self.setpoints)):
-                    f.write("0, 0\n")
-                    setpoint_offsets.append(0)
+        if not self.enable_offsets:
             modified_setpoints = self.setpoints
+        else:
+            try:
+                with open(offsets_csv_path, 'r') as f:
+                    reader = csv.reader(f)
+                    setpoint_offsets = [(float(row[0]), float(row[1])) for row in reader]
+                modified_setpoints = np.add(self.setpoints, setpoint_offsets)
+            except FileNotFoundError as ex:
+                # initialise setpoints offsets csv file with all zeroes
+                with open(offsets_csv_path, 'w') as f:
+                    setpoint_offsets = []
+                    for _ in range(len(self.setpoints)):
+                        f.write("0, 0\n")
+                        setpoint_offsets.append(0)
+                modified_setpoints = self.setpoints
         new_offsets = []
         # Todo: this assumes the well plate position starts @ 0,0 : ie a corner of the well plate is in frame
         # Todo: the initial previous setpoint probably needs to be set to some known initial offset
@@ -302,7 +307,7 @@ class WellPositionController(QThread):
                     self.move_motors(result[0], result[1])
 
         # write new offsets to _offsets.csv file (unless in debug mode)
-        if not self.debug:
+        if not self.debug and self.enable_offsets:
             with open(offsets_csv_path, 'w') as f:
                 f.writelines(["{:.3f}, {:.3f}\n".format(x[0], x[1]) for x in new_offsets])
 
