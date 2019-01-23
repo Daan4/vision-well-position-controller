@@ -239,6 +239,16 @@ def generate_mp4(image_dir, output_filename, fps=12):
     imageio.mimsave(output_filename, images, fps=fps)
 
 
+def generate_gif(image_dir, output_filename):
+    """Used to convert the images outputted by rename_correct_image to a gif"""
+    images = []
+    for filename in os.listdir(image_dir):
+        if filename.endswith('.png'):
+            filepath = os.path.join(image_dir, filename)
+            images.append(imageio.imread(filepath))
+    imageio.mimsave(output_filename, images)
+
+
 if __name__ == '__main__':
     #filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
     #filename = 'logs/48x well plate with offsets.csv'
