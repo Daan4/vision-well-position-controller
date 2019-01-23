@@ -227,24 +227,26 @@ class WPCLogParser():
                 well_counter += 1
 
 
-def generate_gif(image_dir, output_filename, fps=0.2):
-    """Used to convert the images outputted by rename_correct_image to a gif"""
+def generate_mp4(image_dir, output_filename, fps=12):
+    """Used to convert the images outputted by rename_correct_image to a mp4
+    output_filename should end in .mp4"""
     images = []
     for filename in os.listdir(image_dir):
         if filename.endswith('.png'):
             filepath = os.path.join(image_dir, filename)
             images.append(imageio.imread(filepath))
-    imageio.mimsave(output_filename, images)
+    imageio.plugins.ffmpeg.download()
+    imageio.mimsave(output_filename, images, fps=fps)
 
 
 if __name__ == '__main__':
     #filename = 'logs/50x random error from (start E4 end B4) max error [0.5, 2.5] error margin [0.2, 0.2].csv'
-    filename = 'logs/48x well plate with offsets.csv'
-    #filename = 'logs/48x well plate without offsets.csv'
+    #filename = 'logs/48x well plate with offsets.csv'
+    filename = 'logs/48x well plate without offsets.csv'
     wlp = WPCLogParser(filename)
-    print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
-    print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
-    print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
-    #wlp.rename_correct_images('48x w o offsets')
-    wlp.plot_errors(mm=True, _filename='out2.png')
-    #generate_gif('images/48x w offsets/', 'images/48x w o offsets/48x w offsets.gif')
+    #print("average required iterations: {:.3f}".format(wlp.average_required_iterations()))
+    #print("average total error per iteration: {:.3f} mm".format(wlp.average_total_error_per_iteration()))
+    #print("average time taken per setpoint: {:.3f} s".format(wlp.average_time_per_setpoint()))
+    wlp.rename_correct_images('48x w o offsets')
+    #wlp.plot_errors(mm=True, _filename='out2.png')
+    generate_mp4('images/48x w o offsets/', 'images/48x w o offsets/48x w o offsets.mp4', fps=4)
