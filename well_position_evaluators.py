@@ -4,11 +4,14 @@ import numpy as np
 import wormvision
 import timeit
 from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtWidgets import QApplication
+from qtui import MainWindow
+import sys
 
 
 class WellPositionEvaluator(QObject):
     @abstractmethod
-    def __init__(self):
+    def __init__(self, qtui=None):
         super().__init__()
 
     @abstractmethod
@@ -134,7 +137,7 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
     update_scores = pyqtSignal(np.ndarray)
     update_result = pyqtSignal(np.ndarray)
     
-    def __init__(self, resolution, debug=False):
+    def __init__(self, resolution, debug=False, qtui=None):
         super().__init__()
         self.debug = debug
         self.img_width, self.img_height = resolution
@@ -155,6 +158,14 @@ class WellBottomFeaturesEvaluator(WellPositionEvaluator):
         self.close_kernelsize = (10, 10)
         # classification
         self.area_threshold = 5000
+        
+        if qtui is not None:
+            # Set up signal-slot connections
+            self.update_blur.connect(qtui.update_blur)
+            self.update_gamma.connect(qtui.update_gamma)
+            self.update_threshold.connect(qtui.update_threshold)
+            self.update_scores.connect(qtui.update_scores)
+            self.update_result.connect(qtui.update_result)
 
     def evaluate(self, img, target=(0, 0)):
         """ Finds the position error by finding the well bottom centroid.
@@ -314,7 +325,7 @@ def test_wellbottomfeaturesevaluator():
         # single run to compare c vs opencv result
         #imgpath = 'C:\\Users\\Daan\\Documents\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538675539656_downscaled.png'
         #imgpath = 'D:\\Libraries\\Documents\\svn\\EVD_PROJ\\99-0. Overig\\05. Images of C. Elegans (11-10-2018)\\all_downscaled\\manualControl_v0.2.py_1538674924133_downscaled.png'
-        imgpath = 'D:\\Libraries\\Documents\\pycharmprojects\\well-position-controller\\images\\test32.png'
+        imgpath = 'D:\\Libraries\\Documents\\pycharmprojects\\well-position-controller\\images\\20190121151614.png'
         x = WellBottomFeaturesEvaluator((410, 308), True)
         img = cv2.imread(imgpath, cv2.CV_8UC1)
         print('opencv: {}'.format(x.evaluate(img, (227, 144))))
@@ -337,6 +348,22 @@ def test_houghtransformevaluator():
     cv2.waitKey(0)
 
 
+def test_wellbottomfeaturesevaluator_with_gui():
+    app = QApplication(sys.argv)
+    mainwindow = MainWindow()
+    mainwindow.show()
+
+    imgpath = 'D:\\Libraries\\Documents\\pycharmprojects\\well-position-controller\\images\\20190121151614.png'
+    x = WellBottomFeaturesEvaluator((410, 308), True, qtui=mainwindow)
+    img = cv2.imread(imgpath, cv2.CV_8UC1)
+    print('opencv: {}'.format(x.evaluate(img, (227, 144))))
+
+    app.exec_()
+
+
 if __name__ == '__main__':
-    test_wellbottomfeaturesevaluator()
+    test_wellbottomfeaturesevaluator_with_gui()
+
+    #test_wellbottomfeaturesevaluator()
+
     #test_houghtransformevaluator()

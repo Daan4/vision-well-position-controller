@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
     # Set up well position controller and evaluators
     target_coordinates = (0, 0)  # to be determined
-    e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE_EVALUATOR), 1)
+    e1 = (WellBottomFeaturesEvaluator(RESOLUTION, ENABLE_DEBUG_MODE_EVALUATOR, qtui=main_window), 1)
     # e2 = (HoughTransformEvaluator(RESOLUTION, ENABLE_DEBUG_MODE), 1)
     wpc = WellPositionController(SETPOINTS_FILE,
                                  MAX_ALLOWED_ERROR_MM,
@@ -108,15 +108,7 @@ if __name__ == '__main__':
                                  logging=ENABLE_LOGGING,
                                  debug_mode_max_error_mm=DEBUG_MODE_MAX_ERROR_MM,
                                  debug_mode_min_error_mm=DEBUG_MODE_MIN_ERROR_MM,
-                                 enable_offsets = ENABLE_OFFSETS)
-
-    # Connect qt signals and slots for displaying images
-    # connect evaluator emitters to update function in gui to display images using qt
-    e1[0].update_blur.connect(main_window.update_blur)
-    e1[0].update_gamma.connect(main_window.update_gamma)
-    e1[0].update_threshold.connect(main_window.update_threshold)
-    e1[0].update_scores.connect(main_window.update_scores)
-    e1[0].update_result.connect(main_window.update_result)
+                                 enable_offsets=ENABLE_OFFSETS)
 
     wpc.start()
 
